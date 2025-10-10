@@ -1,0 +1,97 @@
+name: Deploy
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'api/**'
+      - .github/workflows/deploy.yml
+  workflow_dispatch:
+    inputs:
+      versionName:
+        description: 'Version Name to deploy'
+        required: true
+      versionDescription:
+        description: 'Version Description to deploy'
+        required: true
+
+env:
+  # Motia Deploy
+  MOTIA_API_KEY: ${{ secrets.MOTIA_API_KEY }}
+  MOTIA_ENV_ID: abc37e6f-1095-4446-bc28-f70a93eceb83
+  JWT_EXPIRATION: 30d
+
+jobs:
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name || github.ref }}
+
+      - name: Set VERSION_NAME and DESCRIPTION
+        id: meta
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "VERSION_NAME=${{ github.event.inputs.versionName }}" >> $GITHUB_ENV
+            echo "VERSION_DESCRIPTION=${{ github.event.inputs.versionDescription }}" >> $GITHUB_ENV
+          else
+            echo "VERSION_NAME=${GITHUB_SHA::7}" >> $GITHUB_ENV
+            echo "VERSION_DESCRIPTION=${{ github.event.head_commit.message }}" >> $GITHUB_ENV
+          fi
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - uses: pnpm/action-setup@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20.11.1'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Create Env file
+        working-directory: api
+        run: |
+          echo "OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}" > .env
+          echo "GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}" >> .env
+          echo "ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }}" >> .env
+          echo "STOCKFISH_BIN_PATH=/var/task/lib/stockfish" >> .env
+          echo "XAI_API_KEY=${{ secrets.XAI_API_KEY }}" >> .env
+          echo "JWT_EXPIRATION=${{ env.JWT_EXPIRATION }}" >> .env
+          echo "JWT_SECRET=${{ secrets.JWT_SECRET }}" >> .env
+          echo "SUPABASE_URL=${{ secrets.SUPABASE_URL }}" >> .env
+          echo "SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}" >> .env
+          echo "SUPABASE_SERVICE_ROLE_KEY=${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" >> .env
+
+      - name: Download Stockfish Binary
+        working-directory: api
+        run: |
+          mkdir -p lib
+          curl -L https://github.com/official-stockfish/Stockfish/releases/latest/download/stockfish-ubuntu-x86-64-avx2.tar -o stockfish-source.tar
+          tar -xvf stockfish-source.tar
+          chmod +x stockfish/stockfish-ubuntu-x86-64-avx2
+          mv stockfish/stockfish-ubuntu-x86-64-avx2 lib/stockfish
+          rm -rf stockfish-source.tar stockfish
+
+      - name: Motia Install
+        working-directory: api
+        run: npx motia install
+
+      - name: Deploy using Motia Cloud
+        working-directory: api
+        run: |
+          npx motia cloud deploy \
+            --api-key ${{ env.MOTIA_API_KEY }} \
+            --environment-id ${{ env.MOTIA_ENV_ID }} \
+            --version-name "${{ env.VERSION_NAME }}" \
+            --version-description "${{ env.VERSION_DESCRIPTION }}" \
+            --env-file .env
