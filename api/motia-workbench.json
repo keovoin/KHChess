@@ -1,0 +1,85 @@
+[
+  {
+    "id": "chess",
+    "config": {
+      "steps/chess/09-purge-stuck-games.step.ts": {
+        "x": -237,
+        "y": 580
+      },
+      "steps/chess/08-game-ended.step.ts": {
+        "x": 1441,
+        "y": 342,
+        "targetHandlePosition": "left"
+      },
+      "steps/chess/06-send-message.step.ts": {
+        "x": 1304,
+        "y": 104
+      },
+      "steps/chess/05-ai-player.step.ts": {
+        "x": 1074,
+        "y": 506,
+        "sourceHandlePosition": "bottom",
+        "targetHandlePosition": "top"
+      },
+      "steps/chess/04-chess-game-moved.step.ts": {
+        "x": 589,
+        "y": 507,
+        "sourceHandlePosition": "bottom",
+        "targetHandlePosition": "top"
+      },
+      "steps/chess/03-move-api.step.ts": {
+        "x": 724,
+        "y": 112
+      },
+      "steps/chess/02-get-game.step.ts": {
+        "x": 1045,
+        "y": 114
+      },
+      "steps/chess/01-get-live-ai-game.step.ts": {
+        "x": -222,
+        "y": 344,
+        "sourceHandlePosition": "right"
+      },
+      "steps/chess/01-create-game.step.ts": {
+        "x": 432,
+        "y": 111,
+        "targetHandlePosition": "left"
+      },
+      "steps/chess/00-available-models-api.step.ts": {
+        "x": -209,
+        "y": 86,
+        "sourceHandlePosition": "right"
+      },
+      "steps/chess/access/request-access.step.ts": {
+        "x": 574,
+        "y": 690
+      },
+      "steps/chess/access/accept-request-access.step.ts": {
+        "x": 889,
+        "y": 681
+      },
+      "steps/chess/evaluate_player_move_step.py": {
+        "x": 157,
+        "y": 680
+      }
+    }
+  },
+  {
+    "id": "auth",
+    "config": {
+      "steps/auth/01-get-user-api.step.ts": {
+        "x": 0,
+        "y": 0
+      }
+    }
+  },
+  {
+    "id": "Auth",
+    "config": {
+      "steps/auth/00-auth-api.step.ts": {
+        "x": 0,
+        "y": 0
+      }
+    }
+  }
+]
