@@ -1,0 +1,14 @@
+node_modules
+python_modules
+.venv
+venv
+.motia
+.mermaid
+dist
+*.pyc
+.DS_Store
+.vscode
+.env
+.env.production
+api/lib/*
+deploy.sh
