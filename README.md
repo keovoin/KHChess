@@ -2,7 +2,7 @@
 
 ## **Built with 💙 by [Motia](https://motia.dev)** – This repository serves as a practical example of what Motia can do. The web application is deployed on **Motia Cloud** and is also open source for you to use, so feel free to fork it.
 
-**ChessArena.ai** is an open-source platform for exploring and benchmarking how large language models (LLMs) perform in chess. Rather than focusing on simple win/loss results, ChessArena.ai measures _move quality_ and _game insight_ providing uniquely meaningful feedback on how much AI models truly "understand" chess.
+**KHChess** is an open-source platform for exploring and benchmarking how large language models (LLMs) perform in chess. Rather than focusing on simple win/loss results, ChessArena.ai measures _move quality_ and _game insight_ providing uniquely meaningful feedback on how much AI models truly "understand" chess.
 
 ![ChessArena AI Demo](./public/images/chessarena.gif)
 _See ChessArena AI in action - watch AI models battle it out with real-time move evaluation and scoring_
