@@ -1,0 +1,84 @@
+import { useScrollIntoView } from '@/lib/use-scroll-into-view'
+import { cn } from '@/lib/utils'
+import type { AiModelProvider } from '@chessarena/types/ai-models'
+import type { GameMessage } from '@chessarena/types/game-message'
+import type { Game } from '@chessarena/types/game'
+import { OctagonX } from 'lucide-react'
+import React, { memo } from 'react'
+import { ChatBubble, ChatBubbleAvatar, ChatBubbleMessage } from '../ui/chat/chat-bubble'
+import { ChessMove } from './chess-move'
+
+type Props = {
+  message: GameMessage
+  game: Game
+  isLast?: boolean
+}
+
+type ChessPlayer = { [key in AiModelProvider]: string }
+type ChessPlayers = { black: ChessPlayer; white: ChessPlayer }
+
+const avatarImages: ChessPlayers = {
+  black: {
+    openai: '/avatars/openai-black.png',
+    gemini: '/avatars/gemini-black.png',
+    claude: '/avatars/claude.webp',
+    grok: '/avatars/grok-white.png',
+  },
+  white: {
+    openai: '/avatars/openai-white.png',
+    gemini: '/avatars/gemini-white.png',
+    claude: '/avatars/claude.webp',
+    grok: '/avatars/grok-white.png',
+  },
+}
+
+export const ChessMessage: React.FC<Props> = memo(({ message, game, isLast }) => {
+  const ref = useScrollIntoView(!!isLast)
+
+  if (message.role === 'spectator') {
+    return null
+  }
+
+  const role = message.role === 'root' ? 'white' : message.role
+  const image = message.profilePic ?? avatarImages[role]?.[message.sender as keyof (typeof avatarImages)[typeof role]]
+  const player = game.players[role]
+  const modelName = player?.model
+
+  return (
+    <ChatBubble variant={role} ref={ref}>
+      <ChatBubbleAvatar
+        color={message.role === 'white' ? 'white' : 'black'}
+        fallback={message.sender.slice(0, 1).toUpperCase()}
+        src={image}
+      />
+      <ChatBubbleMessage className="max-w-[calc(100%-40px)]">
+        <div className="flex flex-col mb-3">
+          <span className="capitalize text-lg font-bold">{message.sender}</span>
+          {modelName && (
+            <span className={cn('text-sm font-medium', message.role === 'white' ? 'text-gray-800' : 'text-gray-300')}>
+              {modelName}
+            </span>
+          )}
+        </div>
+        <p className="text-md font-medium">{message.message}</p>
+        {message.isIllegalMove && (
+          <div className="mt-3 bg-[#FDCFE0] border-2 rounded-md p-3 text-[#F40D62] flex flex-row gap-2 items-start font-semibold">
+            <OctagonX className="size-5 mt-0.5" />
+            This move is illegal
+          </div>
+        )}
+        {message.move && (
+          <div
+            className={cn(
+              'flex flex-row justify-between w-full p-4 rounded-sm font-medium items-center mt-3',
+              message.role === 'white' ? 'bg-white' : 'bg-black',
+            )}
+          >
+            {message.role === 'white' ? 'White move' : 'Black move'}
+            <ChessMove from={message.move.from} to={message.move.to} color={role} />
+          </div>
+        )}
+      </ChatBubbleMessage>
+    </ChatBubble>
+  )
+})

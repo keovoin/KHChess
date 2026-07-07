@@ -1,0 +1,13 @@
+# Dependencies
+node_modules
+python_modules
+
+# Build output / caches
+dist
+lib
+.motia
+.mermaid
+
+# Motia auto-generated files (see header note in types.d.ts)
+types.d.ts
+motia-workbench.json

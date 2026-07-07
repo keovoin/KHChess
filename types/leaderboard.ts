@@ -12,6 +12,9 @@ export const LeaderboardSchema = z.object({
   illegalMoves: z.number({ description: 'The number of illegal moves' }),
   sumCentipawnScores: z.number({ description: 'The sum of all centipawn scores' }),
   sumHighestSwing: z.number({ description: 'The sum of all highest swings' }),
+  sumTurns: z
+    .number({ description: 'The sum of all game lengths in turns, used to derive average game length' })
+    .optional(),
 })
 
 export type Leaderboard = z.infer<typeof LeaderboardSchema>
