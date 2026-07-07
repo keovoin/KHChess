@@ -97,6 +97,7 @@ export const handler: Handlers['GameEnded'] = async (input, { logger, streams })
       illegalMoves: (leaderboard?.illegalMoves ?? 0) + playerIllegalMoves,
       sumCentipawnScores: (leaderboard?.sumCentipawnScores ?? 0) + playerScore.finalCentipawnScore,
       sumHighestSwing: (leaderboard?.sumHighestSwing ?? 0) + playerScore.highestSwing,
+      sumTurns: (leaderboard?.sumTurns ?? 0) + (game.turns ?? 0),
     }
   }
 

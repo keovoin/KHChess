@@ -7,11 +7,28 @@ Welcome to the future of AI chess! This roadmap outlines our planned features an
 ## 🏆 Current State
 
 ### ✅ Currently Supported AI Models
-| Provider | Model | Capabilities | Cost Tier | Status |
-|----------|--------|-------------|-----------|--------|
-| **OpenAI** | `gpt-4o-mini-2024-07-18` | Fast, cost-effective | Budget | ✅ Active |
-| **Google** | `gemini-2.0-flash-001` | Latest, multimodal | Premium | ✅ Active |
-| **Anthropic** | `claude-3-5-sonnet-20241022` | High intelligence, balanced | Premium | ✅ Active |
+
+These are the models users can select for human-vs-AI and AI-vs-AI games. The full source of
+truth is [`api/services/ai/models.ts`](./api/services/ai/models.ts).
+
+| Provider | Supported models |
+|----------|------------------|
+| **OpenAI** | `gpt-5-2025-08-07`, `o4-mini-2025-04-16`, `gpt-4.1-nano-2025-04-14`, `gpt-4.1-mini-2025-04-14`, `o3-mini-2025-01-31`, `gpt-4o-mini-2024-07-18` |
+| **Google** | `gemini-2.5-pro`, `gemini-2.5-flash`, `gemini-2.0-flash-001` |
+| **Anthropic** | `claude-opus-4-1-20250805`, `claude-opus-4-20250514`, `claude-sonnet-4-20250514`, `claude-3-7-sonnet-20250219`, `claude-3-5-sonnet-20241022`, `claude-3-5-haiku-20241022` |
+| **xAI** | `grok-4`, `grok-3` |
+
+### ⚙️ Default AI-vs-AI Models
+
+Used for live AI-vs-AI matches and as a backwards-compatible fallback for games without an
+explicit model (`models` in `api/services/ai/models.ts`):
+
+| Provider | Default model |
+|----------|---------------|
+| **OpenAI** | `o4-mini-2025-04-16` |
+| **Google** | `gemini-2.5-flash` |
+| **Anthropic** | `claude-sonnet-4-20250514` |
+| **xAI** | `grok-3` |
 
 ---
 
@@ -33,8 +50,8 @@ Here is an enhanced "Advanced AI Model Support" section for your ROADMAP.md, inc
 - [ ] **OpenAI Deep Research** – Specialized for research automation
 
 **Google DeepMind Reasoning**
-- [ ] **Gemini 2.5 Pro** – 86.4 GPQA Diamond score, top-tier reasoning
-- [ ] **Gemini 2.5 Flash** – Fast, multimodal reasoning
+- [x] **Gemini 2.5 Pro** – 86.4 GPQA Diamond score, top-tier reasoning *(now supported)*
+- [x] **Gemini 2.5 Flash** – Fast, multimodal reasoning *(now supported)*
 - [ ] **Gemini 2.0 Flash Thinking** – Transparent, explainable reasoning
 
 **xAI Advanced Models**
@@ -143,7 +160,7 @@ Consider these factors: {{strategic_hints}}
 
 #### **Elo Rating System**
 - [ ] **Model Elo rankings** - Dynamic ratings for each AI model
-- [ ] **Performance tracking** - Win rates, average games length, tactical accuracy
+- [x] **Performance tracking** - Win rates, average games length (avg. moves), avg. centipawn score, blunders/swing *(shown on the leaderboard)*
 - [ ] **Head-to-head statistics** - Model vs model historical performance
 - [ ] **Tournament brackets** - Automated model competitions
 - [ ] **Rating stability analysis** - Track performance consistency
@@ -262,6 +279,6 @@ Want to contribute to the future of AI chess? Here's how:
 
 ---
 
-*Last updated: July 2025 | Next review: August 2025*
+*Last updated: July 2026 | Next review: August 2026*
 
 **Built with ❤️ using the [Motia Framework](https://github.com/motiadev/motia) - The modern backend framework**
