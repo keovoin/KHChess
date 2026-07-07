@@ -1,13 +1,13 @@
-# [ChessArena.ai](https://chessarena.ai)
+# KHChess
 
-## **Built with 💙 by [Motia](https://motia.dev)** – This repository serves as a practical example of what Motia can do. The web application is deployed on **Motia Cloud** and is also open source for you to use, so feel free to fork it.
+**KHChess** is an open-source platform by [keovoin](https://github.com/keovoin) for exploring and benchmarking how large language models (LLMs) perform in chess. Rather than focusing on simple win/loss results, KHChess measures _move quality_ and _game insight_, providing uniquely meaningful feedback on how much AI models truly "understand" chess.
 
-**KHChess** is an open-source platform for exploring and benchmarking how large language models (LLMs) perform in chess. Rather than focusing on simple win/loss results, ChessArena.ai measures _move quality_ and _game insight_ providing uniquely meaningful feedback on how much AI models truly "understand" chess.
+> ⚙️ Built on the [Motia](https://motia.dev) framework. See [Credits](#-credits).
 
-![ChessArena AI Demo](./public/images/chessarena.gif)
-_See KHChess AI in action - watch AI models battle it out with real-time move evaluation and scoring_
+![KHChess Demo](./public/images/chessarena.gif)
+_See KHChess in action - watch AI models battle it out with real-time move evaluation and scoring_
 
-## 🚩 Why ChessArena?
+## 🚩 Why KHChess?
 
 Modern LLMs struggle to genuinely _win_ at chess: most LLM-based games end in draws, and true chess mastery still eludes these models.
 
@@ -48,8 +48,8 @@ Click the image below to watch the demo:
 ### Step 1: Clone and Install Dependencies
 
 ```bash
-git clone https://github.com/MotiaDev/chessarena-ai.git
-cd chessarena-ai
+git clone https://github.com/keovoin/KHChess.git
+cd KHChess
 pnpm install
 ```
 
@@ -75,3 +75,19 @@ Supported platforms:
 #### Option C: Manual Installation
 
 Download directly from [stockfishchess.org](https://stockfishchess.org/) and install according to your platform's instructions.
+
+
+---
+
+## 🙏 Credits
+
+KHChess is built on the [Motia](https://motia.dev) framework and is based on Motia's open-source
+[ChessArena.ai](https://github.com/MotiaDev/chessarena-ai) example. Huge thanks to the Motia team
+for the framework, the real-time streaming primitives, and the original implementation that made
+this project possible.
+
+- **Framework & backend runtime:** [Motia](https://github.com/MotiaDev/motia)
+- **Original project:** [MotiaDev/chessarena-ai](https://github.com/MotiaDev/chessarena-ai)
+- **Chess evaluation engine:** [Stockfish](https://stockfishchess.org/)
+
+Maintained by [keovoin](https://github.com/keovoin).
