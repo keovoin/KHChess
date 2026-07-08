@@ -1,0 +1,30 @@
+# Version control
+.git
+.github
+
+# Dependencies (reinstalled inside the image)
+**/node_modules
+
+# Build outputs / caches (regenerated inside the image)
+**/dist
+api/python_modules
+api/lib
+api/.motia
+api/.mermaid
+
+# Frontend source is not needed for the API image (only app/package.json is copied)
+app/src
+app/public
+app/index.html
+app/vite.config.ts
+app/vercel.json
+
+# Env files & secrets (provided at runtime via Fly secrets)
+**/.env
+**/.env.*
+
+# Misc
+**/*.log
+.DS_Store
+.vscode
+public

@@ -1,0 +1,31 @@
+# Fly.io config for the KHChess Motia backend.
+# Rename `app` to your own unique Fly app name (or let `fly launch` set it),
+# and change `primary_region` to one close to your users.
+
+app = "khchess-api"
+primary_region = "iad"
+
+[build]
+  dockerfile = "Dockerfile"
+
+# Non-secret config. Secrets (API keys, JWT_SECRET, Supabase keys) are set with
+# `fly secrets set ...` and injected as env vars at runtime — never commit those here.
+[env]
+  NODE_ENV = "production"
+  HOST = "0.0.0.0"
+  PORT = "3000"
+  STOCKFISH_BIN_PATH = "/app/api/lib/stockfish"
+  JWT_EXPIRATION = "30d"
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+  # This app runs background AI-vs-AI games, a cron step, and live WebSocket
+  # streams, so it must stay running rather than scale to zero.
+  auto_stop_machines = "off"
+  auto_start_machines = true
+  min_machines_running = 1
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "1gb"

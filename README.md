@@ -76,6 +76,64 @@ Supported platforms:
 
 Download directly from [stockfishchess.org](https://stockfishchess.org/) and install according to your platform's instructions.
 
+---
+
+## 🚀 Deployment
+
+The frontend (`app`) deploys to any static host (e.g. **Vercel**). The backend (`api`) is a
+Motia server that you can **self-host** — you are not tied to Motia Cloud.
+
+### Backend on Fly.io (self-hosted)
+
+This repo ships a root [`Dockerfile`](./Dockerfile) and [`fly.toml`](./fly.toml) that bundle
+Node, Python (for the move-evaluation step), and the Stockfish engine into one image.
+
+**Prerequisites:** a [Fly.io](https://fly.io) account and [`flyctl`](https://fly.io/docs/flyctl/install/) installed.
+
+```bash
+# 1. From the repo root, create the app (detects the existing fly.toml + Dockerfile).
+#    Pick a unique app name and your region; do NOT deploy yet.
+fly launch --no-deploy
+
+# 2. Set the runtime secrets (never commit these).
+fly secrets set \
+  OPENAI_API_KEY=... \
+  GEMINI_API_KEY=... \
+  ANTHROPIC_API_KEY=... \
+  XAI_API_KEY=... \
+  JWT_SECRET=... \
+  SUPABASE_URL=... \
+  SUPABASE_ANON_KEY=... \
+  SUPABASE_SERVICE_ROLE_KEY=...
+
+# 3. Deploy.
+fly deploy
+```
+
+Your backend will be available at `https://<your-app>.fly.dev` (HTTP + WebSocket).
+
+Notes:
+
+- Non-secret config (`PORT`, `STOCKFISH_BIN_PATH`, `JWT_EXPIRATION`, `NODE_ENV`) lives in `fly.toml` `[env]`.
+- The machine is kept always-on (`min_machines_running = 1`, `auto_stop_machines = "off"`) because the app runs background AI-vs-AI games, a cron cleanup step, and live streams.
+- See [`api/.env.sample`](./api/.env.sample) for the full list of backend variables.
+
+### Point the frontend at your backend
+
+Set these in your frontend host (e.g. Vercel project env), using your Fly URL:
+
+```bash
+VITE_API_URL=https://<your-app>.fly.dev
+VITE_SOCKET_URL=wss://<your-app>.fly.dev
+VITE_SUPABASE_URL=...
+VITE_SUPABASE_ANON_KEY=...
+```
+
+### Alternative: Motia Cloud
+
+The included `.github/workflows/deploy.yml` deploys the backend to Motia Cloud instead. If you
+go that route, replace the hardcoded `MOTIA_ENV_ID` with your own environment ID and add the
+matching repository secrets.
 
 ---
 
