@@ -1,13 +1,13 @@
-# [ChessArena.ai](https://chessarena.ai)
+# KHChess
 
-## **Built with 💙 by [Motia](https://motia.dev)** – This repository serves as a practical example of what Motia can do. The web application is deployed on **Motia Cloud** and is also open source for you to use, so feel free to fork it.
+**KHChess** is an open-source platform by [keovoin](https://github.com/keovoin) for exploring and benchmarking how large language models (LLMs) perform in chess. Rather than focusing on simple win/loss results, KHChess measures _move quality_ and _game insight_, providing uniquely meaningful feedback on how much AI models truly "understand" chess.
 
-**KHChess** is an open-source platform for exploring and benchmarking how large language models (LLMs) perform in chess. Rather than focusing on simple win/loss results, ChessArena.ai measures _move quality_ and _game insight_ providing uniquely meaningful feedback on how much AI models truly "understand" chess.
+> ⚙️ Built on the [Motia](https://motia.dev) framework. See [Credits](#-credits).
 
-![ChessArena AI Demo](./public/images/chessarena.gif)
-_See KHChess AI in action - watch AI models battle it out with real-time move evaluation and scoring_
+![KHChess Demo](./public/images/chessarena.gif)
+_See KHChess in action - watch AI models battle it out with real-time move evaluation and scoring_
 
-## 🚩 Why ChessArena?
+## 🚩 Why KHChess?
 
 Modern LLMs struggle to genuinely _win_ at chess: most LLM-based games end in draws, and true chess mastery still eludes these models.
 
@@ -48,8 +48,8 @@ Click the image below to watch the demo:
 ### Step 1: Clone and Install Dependencies
 
 ```bash
-git clone https://github.com/MotiaDev/chessarena-ai.git
-cd chessarena-ai
+git clone https://github.com/keovoin/KHChess.git
+cd KHChess
 pnpm install
 ```
 
@@ -75,3 +75,77 @@ Supported platforms:
 #### Option C: Manual Installation
 
 Download directly from [stockfishchess.org](https://stockfishchess.org/) and install according to your platform's instructions.
+
+---
+
+## 🚀 Deployment
+
+The frontend (`app`) deploys to any static host (e.g. **Vercel**). The backend (`api`) is a
+Motia server that you can **self-host** — you are not tied to Motia Cloud.
+
+### Backend on Fly.io (self-hosted)
+
+This repo ships a root [`Dockerfile`](./Dockerfile) and [`fly.toml`](./fly.toml) that bundle
+Node, Python (for the move-evaluation step), and the Stockfish engine into one image.
+
+**Prerequisites:** a [Fly.io](https://fly.io) account and [`flyctl`](https://fly.io/docs/flyctl/install/) installed.
+
+```bash
+# 1. From the repo root, create the app (detects the existing fly.toml + Dockerfile).
+#    Pick a unique app name and your region; do NOT deploy yet.
+fly launch --no-deploy
+
+# 2. Set the runtime secrets (never commit these).
+fly secrets set \
+  OPENAI_API_KEY=... \
+  GEMINI_API_KEY=... \
+  ANTHROPIC_API_KEY=... \
+  XAI_API_KEY=... \
+  JWT_SECRET=... \
+  SUPABASE_URL=... \
+  SUPABASE_ANON_KEY=... \
+  SUPABASE_SERVICE_ROLE_KEY=...
+
+# 3. Deploy.
+fly deploy
+```
+
+Your backend will be available at `https://<your-app>.fly.dev` (HTTP + WebSocket).
+
+Notes:
+
+- Non-secret config (`PORT`, `STOCKFISH_BIN_PATH`, `JWT_EXPIRATION`, `NODE_ENV`) lives in `fly.toml` `[env]`.
+- The machine is kept always-on (`min_machines_running = 1`, `auto_stop_machines = "off"`) because the app runs background AI-vs-AI games, a cron cleanup step, and live streams.
+- See [`api/.env.sample`](./api/.env.sample) for the full list of backend variables.
+
+### Point the frontend at your backend
+
+Set these in your frontend host (e.g. Vercel project env), using your Fly URL:
+
+```bash
+VITE_API_URL=https://<your-app>.fly.dev
+VITE_SOCKET_URL=wss://<your-app>.fly.dev
+VITE_SUPABASE_URL=...
+VITE_SUPABASE_ANON_KEY=...
+```
+
+### Alternative: Motia Cloud
+
+The included `.github/workflows/deploy.yml` deploys the backend to Motia Cloud instead. If you
+go that route, replace the hardcoded `MOTIA_ENV_ID` with your own environment ID and add the
+matching repository secrets.
+
+---
+
+## 🙏 Credits
+
+KHChess is built on the [Motia](https://motia.dev) framework and is based on Motia's open-source
+[ChessArena.ai](https://github.com/MotiaDev/chessarena-ai) example. Huge thanks to the Motia team
+for the framework, the real-time streaming primitives, and the original implementation that made
+this project possible.
+
+- **Framework & backend runtime:** [Motia](https://github.com/MotiaDev/motia)
+- **Original project:** [MotiaDev/chessarena-ai](https://github.com/MotiaDev/chessarena-ai)
+- **Chess evaluation engine:** [Stockfish](https://stockfishchess.org/)
+
+Maintained by [keovoin](https://github.com/keovoin).
