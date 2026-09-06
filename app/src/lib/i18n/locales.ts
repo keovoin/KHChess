@@ -17,6 +17,8 @@ export const en: Record<string, string> = {
   // Auth
   'auth.signIn': 'Sign In',
   'auth.noAccount': 'No account? Play as a guest',
+  'auth.noAccountShort': 'No account?',
+  'auth.noAccountTail': 'Play as a guest',
   'auth.logIn': 'Log in',
   'auth.playAsGuest': 'Play as Guest',
   'auth.guest': 'Guest',
@@ -75,6 +77,8 @@ export const kh: Record<string, string> = {
   // Auth
   'auth.signIn': 'ចូលគណនី',
   'auth.noAccount': 'គ្មានគណនី? លេងជាភ្ញៀវ',
+  'auth.noAccountShort': 'គ្មានគណនី?',
+  'auth.noAccountTail': 'លេងជាភ្ញៀវ',
   'auth.logIn': 'ចូល',
   'auth.playAsGuest': 'លេងជាភ្ញៀវ',
   'auth.guest': 'ភ្ញៀវ',

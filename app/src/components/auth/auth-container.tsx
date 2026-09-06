@@ -50,7 +50,10 @@ export const AuthContainer = () => {
         </div>
         <div className="min-w-0">
           <span className="block text-white font-medium text-lg truncate">{t('auth.signIn')}</span>
-          <span className="block text-gray-400 text-sm truncate">{t('auth.noAccount')}</span>
+          <span className="block text-gray-400 text-sm leading-tight">
+            {t('auth.noAccountShort')}
+            <span className="hidden sm:inline"> {t('auth.noAccountTail')}</span>
+          </span>
         </div>
       </div>
 
