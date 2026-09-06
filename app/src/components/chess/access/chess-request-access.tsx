@@ -24,7 +24,7 @@ export const ChessRequestAccess: React.FC<{ gameId: string }> = ({ gameId }) => 
     <Card className="bg-black/20 rounded-xl mt-4 p-0">
       <div className="p-4">
         <div className="flex flex-col items-center justify-center gap-2">
-          <div className="text-2xl text-white font-bold mx-auto text-center w-full">Request acesss</div>
+          <div className="text-2xl text-white font-bold mx-auto text-center w-full">Request access</div>
           <div className="text-md mx-auto text-center w-full text-muted-foreground">
             You're currently spectating this game. Request access to play.
           </div>

@@ -13,13 +13,14 @@ type AccessRequest = {
 export const useGetGame = (gameId: string, event: StreamSubscription<unknown, unknown> | null) => {
   const { user } = useAuth()
   const [game, setGame] = useState<GameWithRole | undefined>()
+  const [accessRequest, setAccessRequest] = useState<AccessRequest[]>([])
 
   const getGame = useCallback(async (gameId: string) => {
     const data = await apiClient.get<GameWithRole>(`/chess/game/${gameId}`)
     setGame(data)
+    // seed pending access requests persisted on the game
+    setAccessRequest((data.pendingAccessRequests ?? []).map((r) => ({ user: r.user })))
   }, [])
-
-  const [accessRequest, setAccessRequest] = useState<AccessRequest[]>([])
   const onCancel = (userId: string) => {
     setAccessRequest((prev) => prev.filter((request) => request.user.id !== userId))
   }
@@ -30,12 +31,27 @@ export const useGetGame = (gameId: string, event: StreamSubscription<unknown, un
 
   useEffect(refetch, [refetch])
 
+  // keep the owner's request list in sync with the persisted game state
+  useEffect(() => {
+    if (!game) return
+    const blackAssigned = !!game.players.black.userId || !!game.players.black.ai
+    const pending = blackAssigned
+      ? []
+      : (game.pendingAccessRequests ?? []).map((r) => ({ user: r.user }))
+    setAccessRequest((prev) =>
+      JSON.stringify(prev) === JSON.stringify(pending) ? prev : pending,
+    )
+  }, [game])
+
   // capture on-access-requested event
   useStreamEventHandler(
     {
       event,
       type: 'on-access-requested',
-      listener: (event) => setAccessRequest((prev) => [...prev, event]),
+      listener: (event) =>
+        setAccessRequest((prev) =>
+          prev.some((r) => r.user.id === event.user?.id) ? prev : [...prev, event],
+        ),
     },
     [],
   )

@@ -4,6 +4,7 @@ import { TopBar } from '@/components/ui/top-bar'
 import { useTranslation } from '@/lib/i18n'
 import type { Player } from '@chessarena/types/game'
 import { useCreateGame } from '@/lib/use-create-game'
+import { CreateGameOpponents, type Opponent } from './create-game-opponents'
 import { CreateGamePlayerForm } from './create-game-player-form'
 
 type Props = {
@@ -11,22 +12,26 @@ type Props = {
   onCancel: () => void
 }
 
+type Setup = {
+  forColor: 'white' | 'black'
+  isAiEnabled: boolean
+  initial: Player
+  opponent: Opponent
+}
+
 export const CreateGame: React.FC<Props> = ({ onGameCreated, onCancel }) => {
   const createGame = useCreateGame()
   const { t } = useTranslation()
-  const [whitePlayer, setWhitePlayer] = useState<Player>({})
-  const [blackPlayer, setBlackPlayer] = useState<Player>({})
+  const [setup, setSetup] = useState<Setup>()
   const [isLoading, setIsLoading] = useState(false)
-  const [selectedPlayer, setSelectedPlayer] = useState<Player>(whitePlayer)
-  const selectedPlayerColor = selectedPlayer === whitePlayer ? 'white' : 'black'
 
-  const handleSubmit = async (whitePlayer: Player, blackPlayer: Player) => {
+  const submit = async (players: { white?: Partial<Player>; black?: Partial<Player> }) => {
     setIsLoading(true)
 
     try {
       const game = await createGame({
-        white: { ai: whitePlayer.ai, model: whitePlayer.model },
-        black: { ai: blackPlayer.ai, model: blackPlayer.model },
+        white: { ai: players.white?.ai, model: players.white?.model },
+        black: { ai: players.black?.ai, model: players.black?.model },
       })
 
       onGameCreated(game.id)
@@ -35,31 +40,36 @@ export const CreateGame: React.FC<Props> = ({ onGameCreated, onCancel }) => {
     }
   }
 
-  const handlePlayerSubmit = (player: Player, color: 'white' | 'black') => {
-    if (player.ai && !player.model) {
-      toast(t('create.aiRequired'), {
-        description: t('create.aiRequiredDesc'),
-        position: 'bottom-center',
-      })
-      return
-    }
-
-    if (color === 'white') {
-      setWhitePlayer(player)
-      setSelectedPlayer(blackPlayer)
+  const onPick = (opponent: Opponent) => {
+    if (opponent.kind === 'ai') {
+      // the AI plays black; the user (white) picks its provider + model
+      setSetup({ forColor: 'black', isAiEnabled: true, initial: { ai: 'openai' }, opponent })
     } else {
-      setBlackPlayer(player)
-      handleSubmit(whitePlayer, player)
+      // friend: the user plays white, black seat is left open for the invite
+      setSetup({ forColor: 'white', isAiEnabled: false, initial: {}, opponent })
     }
   }
 
-  const onBack = () => {
-    if (isLoading) {
+  const onPlayerSubmit = (player: Player) => {
+    if (setup?.opponent.kind === 'ai') {
+      if (!player.ai || !player.model) {
+        toast(t('create.aiRequired'), {
+          description: t('create.aiRequiredDesc'),
+          position: 'bottom-center',
+        })
+        return
+      }
+      void submit({ black: { ai: player.ai, model: player.model } })
       return
     }
 
-    if (selectedPlayer === blackPlayer) {
-      setSelectedPlayer(whitePlayer)
+    void submit({})
+  }
+
+  const onBack = () => {
+    if (isLoading) return
+    if (setup) {
+      setSetup(undefined)
     } else {
       onCancel()
     }
@@ -68,13 +78,17 @@ export const CreateGame: React.FC<Props> = ({ onGameCreated, onCancel }) => {
   return (
     <div className="flex flex-col flex-1 gap-14 items-center justify-between w-full">
       <TopBar onBack={onBack} />
-      <CreateGamePlayerForm
-        player={selectedPlayer}
-        color={selectedPlayerColor}
-        onSubmit={handlePlayerSubmit}
-        isAiEnabled
-        isLoading={isLoading}
-      />
+      {setup ? (
+        <CreateGamePlayerForm
+          player={setup.initial}
+          color={setup.forColor}
+          onSubmit={onPlayerSubmit}
+          isAiEnabled={setup.isAiEnabled}
+          isLoading={isLoading}
+        />
+      ) : (
+        <CreateGameOpponents onPick={onPick} />
+      )}
     </div>
   )
 }

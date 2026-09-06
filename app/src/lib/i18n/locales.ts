@@ -39,8 +39,32 @@ export const en: Record<string, string> = {
 
   // Create game
   'create.title': 'Create Game',
+  'create.opponent': 'Who do you want to play?',
+  'create.friendInvite': 'Challenge a friend',
+  'create.friendInviteDesc': 'You play White — share the invite link',
+  'create.ai': 'Play against AI',
+  'create.aiDesc': 'Pick a model and take on the computer',
+  'create.selectColor': 'Select your color',
+  'create.white': 'White',
+  'create.black': 'Black',
+  'create.player': 'Player',
+  'create.model': 'Model',
+  'create.playerDesc': 'Who you will be in this game',
+  'create.modelDesc': 'Which AI model will play your opponent',
+  'create.create': 'Create Game',
   'create.aiRequired': 'An AI model is required',
   'create.aiRequiredDesc': 'You must select an AI model to continue',
+
+  // Invite / PvP
+  'invite.title': 'Invite a friend',
+  'invite.desc': 'Send them the link — they take the black seat',
+  'invite.copy': 'Copy link',
+  'invite.share': 'Share',
+  'invite.shareText': 'I challenged you to a chess game on ChessArena!',
+  'invite.copied': 'Link copied!',
+  'invite.waiting': 'Waiting for opponent to join…',
+  'game.wins': 'wins!',
+  'game.draw': 'Draw!',
 
   // Game
   'game.gameplay': 'Gameplay',
@@ -99,8 +123,32 @@ export const kh: Record<string, string> = {
 
   // Create game
   'create.title': 'បង្កើតការលេង',
+  'create.opponent': 'អ្នកចង់លេងជាមួយនរណា?',
+  'create.friendInvite': 'លេងជាមួយមិត្តភក្តិ',
+  'create.friendInviteDesc': 'អ្នកលេងពណ៌បង្កាស់ — ចែករំលែកតំណអញ្ជើញ',
+  'create.ai': 'លេងជាមួយ AI',
+  'create.aiDesc': 'ជ្រើសរើសម៉ូឌែល ហើយប្រកួតជាមួយកុំព្យូត័រ',
+  'create.selectColor': 'ជ្រើសរើសពណ៌របស់អ្នក',
+  'create.white': 'ពណ៌បង្កាស់',
+  'create.black': 'ពណ៌ខ្មៅ',
+  'create.player': 'អ្នកលេង',
+  'create.model': 'ម៉ូឌែល',
+  'create.playerDesc': 'អ្នកនឹងត្រូវជាអ្នកណាក្នុងការលេងនេះ',
+  'create.modelDesc': 'ម៉ូឌែល AI ណាដែលនឹងលេងជាគូប្រកួតរបស់អ្នក',
+  'create.create': 'បង្កើតការលេង',
   'create.aiRequired': 'ត្រូវការម៉ូឌែល AI',
   'create.aiRequiredDesc': 'អ្នកត្រូវជ្រើសរើសម៉ូឌែល AI ដើម្បីបន្ត',
+
+  // Invite / PvP
+  'invite.title': 'អញ្ជើញមិត្តភក្តិ',
+  'invite.desc': 'ផ្ញើតំណនេះ — ពួកគេនឹងមកលេងកៅអីពណ៌ខ្មៅ',
+  'invite.copy': 'ចម្លងតំណ',
+  'invite.share': 'ចែករំលែក',
+  'invite.shareText': 'ខ្ញុំអញ្ជើញអ្នកលេងល្បែងសៀចង្វាយលើ ChessArena ហើយ!',
+  'invite.copied': 'បានចម្លងតំណហើយ!',
+  'invite.waiting': 'កំពុងរង់ចាំគូប្រកួតមកចូលលេង…',
+  'game.wins': 'ឈ្នះ!',
+  'game.draw': 'ស្មើគ្នា!',
 
   // Game
   'game.gameplay': 'ការលេង',

@@ -2,7 +2,6 @@ import { MotiaPowered } from '@/components/motia-powered'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Panel } from '@/components/ui/panel'
-import { useAuth } from '@/lib/auth/use-auth'
 import { useDeviceWidth } from '@/lib/use-device-width'
 import { useGetGame } from '@/lib/use-get-game'
 import { useTranslation } from '@/lib/i18n'
@@ -18,6 +17,7 @@ import { ChessBoard } from './chess-board'
 import { ChessChatInput } from './chess-chat-input'
 import { ChessLastGameMove } from './chess-last-game-move'
 import { ChessMessages } from './chess-messages'
+import { ChessInviteCard } from './invite/chess-invite-card'
 import { ChessShare } from './chess-share'
 import { ChessSidechat } from './chess-sidechat'
 import Scoreboard from './scoreboard/game-scoreboard'
@@ -30,7 +30,6 @@ type Props = {
 export const ChessGame: React.FC<Props> = ({ gameId, onClose }) => {
   const isMobile = useDeviceWidth() < 1280
   const [isSidechatOpen, setIsSidechatOpen] = useState(!isMobile)
-  const { user } = useAuth()
   const { t } = useTranslation()
   const { data: game, event } = useStreamItem<Game>({
     streamName: 'chessGame',
@@ -51,12 +50,16 @@ export const ChessGame: React.FC<Props> = ({ gameId, onClose }) => {
   const isSpectator = role === 'spectator'
 
   const isBlackAssigned = !!game.players.black.userId || !!game.players.black.ai
-  const isUserOwner = game.players.white.userId === user?.id
+  // server-computed role is the authoritative owner check (creator plays white)
+  const isUserOwner = role === 'white'
+  const isWaitingForOpponent = game.status === 'pending' && !isBlackAssigned
 
   const messagesComponent = (
     <>
       <ChessMessages gameId={gameId} game={game} />
-      {['completed', 'draw'].includes(game.status) && <Scoreboard game={game} />}
+      {['completed', 'draw'].includes(game.status) &&
+        (game.scoreboard || game.players.white.ai || game.players.black.ai) && <Scoreboard game={game} />}
+      {isWaitingForOpponent && isUserOwner && <ChessInviteCard gameId={gameId} />}
       {!isBlackAssigned && !isUserOwner && <ChessRequestAccess gameId={gameId} />}
       {isUserOwner &&
         accessRequest.map((accessRequest, index) => (
@@ -111,7 +114,13 @@ export const ChessGame: React.FC<Props> = ({ gameId, onClose }) => {
           </Panel>
         )}
 
-        <div className="xl:flex-1 content-center w-full xl:p-4 2xl:p-8">
+        <div className="xl:flex-1 content-center w-full xl:p-4 2xl:p-8 flex flex-col items-center gap-3">
+          {isWaitingForOpponent && (
+            <div className="flex flex-row gap-2 items-center justify-center rounded-lg bg-white/10 px-4 py-2 text-sm text-white">
+              <Loader2 className="size-4 animate-spin" />
+              {t('invite.waiting')}
+            </div>
+          )}
           <ChessBoard game={game} role={role} />
         </div>
 

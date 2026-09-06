@@ -63,6 +63,7 @@ export const handler: Handlers['AcceptRequestAccess'] = async (req, { logger, st
       ...game.players,
       black: { ...game.players.black, userId: req.body.userId },
     },
+    pendingAccessRequests: (game.pendingAccessRequests ?? []).filter((r) => r.user.id !== req.body.userId),
   })
 
   await streams.chessGame.send(

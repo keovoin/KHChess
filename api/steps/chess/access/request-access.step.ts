@@ -1,8 +1,8 @@
-import { AiModelsSchema } from '@chessarena/types/ai-models'
 import { ApiRouteConfig, Handlers } from 'motia'
 import { z } from 'zod'
 import { auth } from '../../middlewares/auth.middleware'
 import { UserState } from '../../states/user-state'
+import type { PublicUser } from '@chessarena/types/user'
 
 export const config: ApiRouteConfig = {
   type: 'api',
@@ -47,7 +47,24 @@ export const handler: Handlers['RequestAccess'] = async (req, { logger, streams,
     }
   }
 
-  await streams.chessGame.send({ groupId: 'game', id: gameId }, { type: 'on-access-requested', data: { user } })
+  const publicUser: PublicUser = {
+    id: user.id,
+    name: user.name,
+    profilePic: user.profilePic,
+  }
+
+  const pending = game.pendingAccessRequests ?? []
+  if (!pending.some((r) => r.user.id === publicUser.id)) {
+    await streams.chessGame.set('game', gameId, {
+      ...game,
+      pendingAccessRequests: [...pending, { user: publicUser }],
+    })
+  }
+
+  await streams.chessGame.send(
+    { groupId: 'game', id: gameId },
+    { type: 'on-access-requested', data: { user: publicUser } },
+  )
 
   return { status: 200, body: {} }
 }
