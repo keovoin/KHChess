@@ -1,0 +1,20 @@
+{
+  "name": "ChessArena",
+  "short_name": "ChessArena",
+  "description": "Play chess against top AI models and friends. English + Khmer.",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#242424",
+  "theme_color": "#242424",
+  "lang": "en",
+  "dir": "ltr",
+  "categories": ["games", "sports"],
+  "icons": [
+    { "src": "/pwa-192x192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/pwa-512x512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/pwa-512x512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
