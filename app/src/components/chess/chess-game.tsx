@@ -5,6 +5,7 @@ import { Panel } from '@/components/ui/panel'
 import { useAuth } from '@/lib/auth/use-auth'
 import { useDeviceWidth } from '@/lib/use-device-width'
 import { useGetGame } from '@/lib/use-get-game'
+import { useTranslation } from '@/lib/i18n'
 import { cn } from '@/lib/utils'
 import type { Game } from '@chessarena/types/game'
 import { useStreamItem } from '@motiadev/stream-client-react'
@@ -30,6 +31,7 @@ export const ChessGame: React.FC<Props> = ({ gameId, onClose }) => {
   const isMobile = useDeviceWidth() < 1280
   const [isSidechatOpen, setIsSidechatOpen] = useState(!isMobile)
   const { user } = useAuth()
+  const { t } = useTranslation()
   const { data: game, event } = useStreamItem<Game>({
     streamName: 'chessGame',
     groupId: 'game',
@@ -120,11 +122,11 @@ export const ChessGame: React.FC<Props> = ({ gameId, onClose }) => {
               <div className="flex flex-row gap-2 items-center justify-center">
                 <Tab isSelected={!isSidechatOpen} onClick={() => setIsSidechatOpen(false)}>
                   <Workflow className="size-4" />
-                  Gameplay
+                  {t('game.gameplay')}
                 </Tab>
                 <Tab isSelected={isSidechatOpen} onClick={() => setIsSidechatOpen(true)}>
                   <MessageCircle className="size-4" />
-                  Sidechat
+                  {t('game.sidechat')}
                 </Tab>
               </div>
             </Panel>
@@ -154,8 +156,8 @@ export const ChessGame: React.FC<Props> = ({ gameId, onClose }) => {
               </Button>
 
               <div className="flex flex-col gap-0 items-center justify-center text-lg font-bold">
-                <div className="text-lg font-bold">Sidechat</div>
-                <div className="text-sm text-muted-foreground">Chat with other spectators</div>
+                <div className="text-lg font-bold">{t('game.sidechat')}</div>
+                <div className="text-sm text-muted-foreground">{t('game.sidechatDesc')}</div>
               </div>
             </header>
             <div className="px-4 flex flex-col flex-1 w-full overflow-y-auto">

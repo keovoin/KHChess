@@ -67,6 +67,11 @@
   --scrollbar-background: rgba(255, 255, 255, 0.03);
 }
 
+/* Khmer font when the locale is set to Khmer (html[lang="kh"]) */
+html[lang='kh'] {
+  --default-font-family: 'Kantumruy Pro', 'DM Sans', sans-serif;
+}
+
 .light {
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);

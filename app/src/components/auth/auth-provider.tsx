@@ -24,6 +24,12 @@ const useUserState = () => {
   return [user, setUser] as const
 }
 
+// Emails (comma-separated) that may open the /admin panel.
+const ADMIN_EMAILS = ((import.meta.env.VITE_ADMIN_EMAILS ?? '') as string)
+  .split(',')
+  .map((e) => e.trim().toLowerCase())
+  .filter(Boolean)
+
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useUserState()
   const [isLoading, setIsLoading] = useState<boolean>(false)
@@ -148,12 +154,32 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [])
 
+  // Play without an account: the API mints a short-lived guest token.
+  const loginAsGuest = useCallback(async (): Promise<void> => {
+    setIsLoading(true)
+    setAuthError(null)
+
+    try {
+      const result = await authApi.guestToken()
+      apiClient.setAuthToken(result.accessToken)
+      setUser(result.user)
+      localStorage.setItem('chessarena-guest', '1')
+    } catch (error: unknown) {
+      console.error('Guest login error:', error)
+      setAuthError(handleAuthError(error))
+      throw error
+    } finally {
+      setIsLoading(false)
+    }
+  }, [setUser])
+
   const logout = useCallback(async (): Promise<void> => {
     setIsLoading(true)
     setAuthError(null)
 
     try {
       await AuthService.logout()
+      localStorage.removeItem('chessarena-guest')
       setUser(null)
     } catch (error: unknown) {
       console.error('Logout error:', error)
@@ -164,20 +190,24 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, [setUser])
 
   const isAuthenticated = apiClient.isAuthenticated()
+  const isAdmin = !!user?.email && ADMIN_EMAILS.includes(user.email.toLowerCase())
 
   const value = useMemo(
     () => ({
       user,
       isAuthenticated,
+      isAdmin,
+      isGuest: !!localStorage.getItem('chessarena-guest'),
       isLoading,
       authError,
       login,
       loginWithOtp,
       loginWithOAuth,
+      loginAsGuest,
       logout,
       verifyOtp,
     }),
-    [user, isAuthenticated, isLoading, authError, login, loginWithOtp, loginWithOAuth, logout, verifyOtp],
+    [user, isAuthenticated, isAdmin, isLoading, authError, login, loginWithOtp, loginWithOAuth, loginAsGuest, logout, verifyOtp],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

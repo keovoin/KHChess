@@ -3,6 +3,7 @@ import { ApiRequest } from 'motia'
 
 export type TokenData = {
   sub: string
+  guest?: boolean
 }
 
 declare module 'motia' {

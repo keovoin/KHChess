@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { TopBar } from '@/components/ui/top-bar'
+import { useTranslation } from '@/lib/i18n'
 import type { Player } from '@chessarena/types/game'
 import { useCreateGame } from '@/lib/use-create-game'
 import { CreateGamePlayerForm } from './create-game-player-form'
@@ -12,6 +13,7 @@ type Props = {
 
 export const CreateGame: React.FC<Props> = ({ onGameCreated, onCancel }) => {
   const createGame = useCreateGame()
+  const { t } = useTranslation()
   const [whitePlayer, setWhitePlayer] = useState<Player>({})
   const [blackPlayer, setBlackPlayer] = useState<Player>({})
   const [isLoading, setIsLoading] = useState(false)
@@ -35,8 +37,8 @@ export const CreateGame: React.FC<Props> = ({ onGameCreated, onCancel }) => {
 
   const handlePlayerSubmit = (player: Player, color: 'white' | 'black') => {
     if (player.ai && !player.model) {
-      toast('An ai model is required', {
-        description: 'You must select an ai model to continue',
+      toast(t('create.aiRequired'), {
+        description: t('create.aiRequiredDesc'),
         position: 'bottom-center',
       })
       return
