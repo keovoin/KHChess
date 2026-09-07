@@ -43,14 +43,15 @@ COPY app/package.json ./app/package.json
 RUN pnpm install --filter "@chessarena/api..." --frozen-lockfile
 
 # --- Stockfish engine binary ---
-# sse41-popcnt is broadly compatible across cloud CPUs. Swap to the avx2 build for
-# more speed if your host CPU supports AVX2.
+# Stockfish >= v19 renamed assets: "stockfish-linux-x86-64-universal.tar.gz"
+# (old "stockfish-ubuntu-x86-64-sse41-popcnt.tar" no longer exists). The .tar.gz
+# bundles the full source tree — extract only the binary to keep the image lean.
 RUN mkdir -p /app/api/lib \
-    && curl -L https://github.com/official-stockfish/Stockfish/releases/latest/download/stockfish-ubuntu-x86-64-sse41-popcnt.tar -o /tmp/stockfish.tar \
-    && tar -xf /tmp/stockfish.tar -C /tmp \
-    && mv /tmp/stockfish/stockfish-ubuntu-x86-64-sse41-popcnt /app/api/lib/stockfish \
+    && curl -L https://github.com/official-stockfish/Stockfish/releases/latest/download/stockfish-linux-x86-64-universal.tar.gz -o /tmp/sf.tar.gz \
+    && tar -xzf /tmp/sf.tar.gz -C /tmp stockfish/stockfish-linux-x86-64-universal \
+    && mv /tmp/stockfish/stockfish-linux-x86-64-universal /app/api/lib/stockfish \
     && chmod +x /app/api/lib/stockfish \
-    && rm -rf /tmp/stockfish.tar /tmp/stockfish
+    && rm -rf /tmp/sf.tar.gz /tmp/stockfish
 
 # --- Build the Motia app (outputs to api/dist) ---
 RUN pnpm --filter "@chessarena/api" run build
