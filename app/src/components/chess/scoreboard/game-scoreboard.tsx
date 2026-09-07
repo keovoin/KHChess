@@ -3,7 +3,7 @@ import { useTranslation } from '@/lib/i18n'
 import type { Game } from '@chessarena/types/game'
 import { useScrollIntoView } from '@/lib/use-scroll-into-view'
 import { Info, Loader2 } from 'lucide-react'
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import { Matchup } from './matchup'
 import { ScoreboardRow } from './scoreboard-row'
 
@@ -56,6 +56,16 @@ export const Scoreboard: React.FC<ScoreboardProps> = ({ game }) => {
   const ref = useScrollIntoView()
   const { t } = useTranslation()
   const hasAi = !!game.players.white.ai || !!game.players.black.ai
+
+  // The scoreboard is written by the server a few seconds after the game ends.
+  // If it never arrives (e.g. the game predates a server restart, or the
+  // score handler failed), don't spin forever — show the result after 20s.
+  const [timedOut, setTimedOut] = useState(false)
+  useEffect(() => {
+    if (scoreboard) return
+    const id = setTimeout(() => setTimedOut(true), 20000)
+    return () => clearTimeout(id)
+  }, [scoreboard])
 
   return (
     <Card className="bg-black/20 rounded-xl mt-4 p-0" ref={ref}>
@@ -110,7 +120,7 @@ export const Scoreboard: React.FC<ScoreboardProps> = ({ game }) => {
             </div>
           )}
         </>
-      ) : hasAi ? (
+      ) : hasAi && !timedOut ? (
         <div className="p-4">
           <div className="flex flex-col">
             <Loader2 className="w-8 h-8 mx-auto animate-spin text-muted-foreground" />

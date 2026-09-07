@@ -1,4 +1,5 @@
 import { ArrowLeft } from 'lucide-react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router'
 import { useStreamGroup } from '@motiadev/stream-client-react'
 import type { Leaderboard as LeaderboardType } from '@chessarena/types/leaderboard'
@@ -29,6 +30,15 @@ export const Leaderboard: React.FC<Props> = ({ showBackButton = false, className
     streamName: 'chessLeaderboard',
   })
 
+  // The free server can take 15-30s to wake up on a cold start, so the socket
+  // may not have delivered the group yet right after navigation. Show skeletons
+  // for a bit, then an honest empty state instead of an eternal spinner.
+  const [settled, setSettled] = useState(false)
+  useEffect(() => {
+    const id = setTimeout(() => setSettled(true), 4000)
+    return () => clearTimeout(id)
+  }, [])
+
   const leaderboardWithWinRate =
     leaderboard?.map((item) => ({
       ...item,
@@ -52,9 +62,20 @@ export const Leaderboard: React.FC<Props> = ({ showBackButton = false, className
       <div className="flex flex-col grow gap-6 w-full overflow-y-auto">
         {!sortedLeaderboard || sortedLeaderboard.length === 0 ? (
           <>
-            <LeaderboardSkeleton />
-            <LeaderboardSkeleton />
-            <LeaderboardSkeleton />
+            {settled ? (
+              <div className="flex flex-col gap-2 items-center justify-center py-16 text-center">
+                <div className="text-white/70 font-semibold">No finished games yet</div>
+                <div className="text-white/40 text-sm max-w-[280px]">
+                  Scores appear here once a game finishes. Play a game first.
+                </div>
+              </div>
+            ) : (
+              <>
+                <LeaderboardSkeleton />
+                <LeaderboardSkeleton />
+                <LeaderboardSkeleton />
+              </>
+            )}
           </>
         ) : (
           <div className="flex flex-row grow">

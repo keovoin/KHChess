@@ -8,6 +8,21 @@ const generatePlayerScore = (moves: GameMove[], player: 'white' | 'black'): Play
     .map((move) => move.evaluation)
     .filter((evaluation) => !!evaluation)
 
+  // No evaluated moves for this player (e.g. game ended before eval ran) → zeros.
+  if (evaluations.length === 0) {
+    return {
+      averageSwing: 0,
+      medianSwing: 0,
+      highestSwing: 0,
+      highestCentipawnScore: 0,
+      lowestCentipawnScore: 0,
+      averageCentipawnScore: 0,
+      medianCentipawnScore: 0,
+      finalCentipawnScore: 0,
+      blunders: 0,
+    }
+  }
+
   const swings = evaluations.map((evaluation) => evaluation.evaluationSwing)
   const centipawnScores = evaluations.map((evaluation) => evaluation.centipawnScore)
 
@@ -48,13 +63,13 @@ export const generateGameScore = (moves: GameMove[]): Scoreboard => {
     }
   }
 
-  const highestSwingMove = moves.reduce((max, move) => {
-    if (!move.evaluation) return max
-    if (!max.evaluation) return move
-
-    return max.evaluation.evaluationSwing > move.evaluation.evaluationSwing ? max : move
-  }, firstMove)
-  const moveNumber = moves.findIndex((move) => move === highestSwingMove) + 1
+  const highestSwingMove = moves
+    .filter((move) => !!move.evaluation)
+    .reduce<GameMove | null>(
+      (max, move) => (max && max.evaluation!.evaluationSwing >= move.evaluation!.evaluationSwing ? max : move),
+      null,
+    )
+  const moveNumber = highestSwingMove ? moves.findIndex((move) => move === highestSwingMove) + 1 : 0
 
   const whiteScore = generatePlayerScore(moves, 'white')
   const blackScore = generatePlayerScore(moves, 'black')
@@ -63,11 +78,14 @@ export const generateGameScore = (moves: GameMove[]): Scoreboard => {
     white: whiteScore,
     black: blackScore,
     totalMoves: moves.length,
-    decisiveMoment: {
-      moveNumber,
-      evaluationSwing: highestSwingMove.evaluation!.evaluationSwing,
-      move: highestSwingMove.lastMove,
-      fen: highestSwingMove.fenAfter,
-    },
+    decisiveMoment:
+      highestSwingMove && highestSwingMove.evaluation
+        ? {
+            moveNumber,
+            evaluationSwing: highestSwingMove.evaluation.evaluationSwing,
+            move: highestSwingMove.lastMove,
+            fen: highestSwingMove.fenAfter,
+          }
+        : undefined,
   }
 }
