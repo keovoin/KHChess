@@ -27,7 +27,7 @@ export const Chessground: React.FC<Props> = ({ config = {} }) => {
   return (
     <div
       ref={ref}
-      className="relative max-h-[550px] xl:max-h-[calc(100dvh-32px)] 2xl:max-h-[calc(100dvh-64px)] mx-auto aspect-square overflow-x-clip"
+      className="relative mx-auto aspect-square overflow-x-clip w-[min(100%,550px)] xl:w-[min(100%,calc(100dvh-32px))] 2xl:w-[min(100%,calc(100dvh-64px))]"
     />
   )
 }
