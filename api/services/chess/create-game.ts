@@ -1,9 +1,13 @@
 import { FlowContextStateStreams, Logger } from 'motia'
 import { createGameId } from './create-game-id'
 import { Game } from '@chessarena/types/game'
-import { resolveAiModel } from '../ai/ai-config'
+import { AiModelProvider } from '@chessarena/types/ai-models'
+import { ensureAiConfigLoaded, resolveAiModel } from '../ai/ai-config'
+import { models } from '../ai/models'
 import { isAiGame } from './utils'
 import { User } from '@chessarena/types/user'
+import { LiveAiGames } from '@chessarena/types/live-ai-games'
+import { persistGame, persistLiveAiGame } from '../supabase/persistence'
 
 export const createGame = async (
   players: Game['players'],
@@ -12,6 +16,11 @@ export const createGame = async (
   user?: User,
 ): Promise<Game> => {
   const gameId = await createGameId({ streams, logger })
+
+  // After a redeploy the in-memory AI config resets to defaults — restore the
+  // admin's chosen model from Supabase before we resolve models (one-time read
+  // per process; no-op once loaded).
+  await ensureAiConfigLoaded()
 
   // Fill in the resolved model for AI seats so the stored game is
   // self-consistent (AI step + leaderboard both read the concrete model).
@@ -36,16 +45,23 @@ export const createGame = async (
     check: false,
   })
 
+  // Durable copy (fire-and-forget; never blocks the create response).
+  persistGame(game)
+
   if (isAiGame(game) && white.ai && black.ai) {
-    await streams.chessLiveAiGames.set('game', gameId, {
+    const whiteAi: AiModelProvider = white.ai
+    const blackAi: AiModelProvider = black.ai
+    const live: LiveAiGames = {
       id: gameId,
       createdAt: new Date().toISOString(),
       gameId,
       players: {
-        white: { provider: white.ai, model: white.model },
-        black: { provider: black.ai, model: black.model },
+        white: { provider: whiteAi, model: white.model ?? models[whiteAi] },
+        black: { provider: blackAi, model: black.model ?? models[blackAi] },
       },
-    })
+    }
+    await streams.chessLiveAiGames.set('game', gameId, live)
+    persistLiveAiGame(gameId, live)
   }
 
   return game

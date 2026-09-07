@@ -18,6 +18,7 @@ declare module 'motia' {
 
   interface Handlers {
     'PurgeStuckGames': CronHandler<never>
+    'HydrateState': CronHandler<{ topic: 'chess-game-moved'; data: { gameId: string; fenBefore: string } }>
     'GameEnded': EventHandler<{ gameId: string }, never>
     'SendMessage': ApiRouteHandler<{ message: string; name: string; role: 'white' | 'black' | 'spectator' | 'root' }, ApiResponse<200, { message: string; sender: string; timestamp: number }> | ApiResponse<404, { message: string }>, never>
     'AI_Player': EventHandler<{ player: 'white' | 'black'; fenBefore: string; fen: string; lastMove?: string[]; check: boolean; gameId: string }, { topic: 'chess-game-moved'; data: { gameId: string; fenBefore: string } } | { topic: 'chess-game-ended'; data: { gameId: string } } | { topic: 'evaluate-player-move'; data: { fenBefore: string; fenAfter: string; gameId: string; moveId: string; player: string } }>

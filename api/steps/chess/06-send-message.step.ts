@@ -4,6 +4,7 @@ import { z } from 'zod'
 import { getGameRole } from '../../services/chess/get-game-role'
 import { auth } from '../middlewares/auth.middleware'
 import { UserState } from '../states/user-state'
+import { persistMessage, persistSidechatMessage } from '../../services/supabase/persistence'
 
 export const config: ApiRouteConfig = {
   type: 'api',
@@ -61,6 +62,13 @@ export const handler: Handlers['SendMessage'] = async (req, { logger, streams, s
     isAiGame || role === 'spectator'
       ? await streams.chessSidechatMessage.set(game.id, messageId, message)
       : await streams.chessGameMessage.set(game.id, messageId, message)
+
+  // durable write-through (fire-and-forget)
+  if (isAiGame || role === 'spectator') {
+    persistSidechatMessage(game.id, messageId, message)
+  } else {
+    persistMessage(game.id, messageId, message)
+  }
 
   return { status: 200, body: result }
 }

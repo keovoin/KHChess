@@ -3,6 +3,7 @@ import { ApiRouteConfig, Handlers } from 'motia'
 import { z } from 'zod'
 import { getGameRole } from '../../services/chess/get-game-role'
 import { move } from '../../services/chess/move'
+import { hydrateGame } from '../../services/supabase/persistence'
 import { auth } from '../middlewares/auth.middleware'
 
 export const config: ApiRouteConfig = {
@@ -30,7 +31,11 @@ export const handler: Handlers['MovePiece'] = async (req, { logger, emit, stream
   logger.info('Received move event', { body: req.body })
 
   const gameId = req.pathParams.id
-  const game = await streams.chessGame.get('game', gameId)
+  let game = await streams.chessGame.get('game', gameId)
+  if (!game) {
+    // Memory was wiped by a redeploy — restore from Postgres first.
+    game = (await hydrateGame(gameId, streams)).game
+  }
 
   if (!game) {
     return { status: 404, body: { message: 'Game not found' } }

@@ -7,6 +7,7 @@ import { makePrompt } from '../../services/ai/make-prompt'
 import { resolveAiModel } from '../../services/ai/ai-config'
 import { evaluateBestMoves } from '../../services/chess/evaluate-best-moves'
 import { move } from '../../services/chess/move'
+import { persistGame, persistMessage } from '../../services/supabase/persistence'
 
 const MAX_ATTEMPTS = 3
 
@@ -77,6 +78,7 @@ export const handler: Handlers['AI_Player'] = async (input, { logger, emit, stre
       role: input.player,
       timestamp: Date.now(),
     })
+    persistMessage(input.gameId, messageId, message)
 
     const prompt = mustache.render(
       template,
@@ -107,11 +109,12 @@ export const handler: Handlers['AI_Player'] = async (input, { logger, emit, stre
       logger.info('Updating message', { messageId, gameId: input.gameId })
 
       if (action) {
-        await streams.chessGameMessage.set(input.gameId, messageId, {
+        const updatedMessage = await streams.chessGameMessage.set(input.gameId, messageId, {
           ...message,
           message: action.thought,
           move: action.move,
         })
+        persistMessage(input.gameId, messageId, updatedMessage)
 
         logger.info('AI response', { action })
 
@@ -134,20 +137,22 @@ export const handler: Handlers['AI_Player'] = async (input, { logger, emit, stre
       logger.error('Error making prompt', { err })
 
       if (action) {
-        await streams.chessGameMessage.set(input.gameId, messageId, {
+        const updatedMessage = await streams.chessGameMessage.set(input.gameId, messageId, {
           ...message,
           message: action.thought,
           isIllegalMove: true,
           move: action.move,
         })
+        persistMessage(input.gameId, messageId, updatedMessage)
 
         logger.error('Invalid move', { move: action.move })
         lastInvalidMove = action.move
       } else {
-        await streams.chessGameMessage.set(input.gameId, messageId, {
+        const updatedMessage = await streams.chessGameMessage.set(input.gameId, messageId, {
           ...message,
           message: 'Error making prompt, I will need to try again soon',
         })
+        persistMessage(input.gameId, messageId, updatedMessage)
       }
 
       /**
@@ -158,7 +163,7 @@ export const handler: Handlers['AI_Player'] = async (input, { logger, emit, stre
 
         const playerIllegalMoveAttempts = game.players[input.player].illegalMoveAttempts ?? 0
 
-        await streams.chessGame.set('game', game.id, {
+        const completedGame = await streams.chessGame.set('game', game.id, {
           ...game,
           status: 'completed',
           winner: input.player === 'white' ? 'black' : 'white',
@@ -171,6 +176,7 @@ export const handler: Handlers['AI_Player'] = async (input, { logger, emit, stre
             },
           },
         })
+        persistGame(completedGame)
 
         await emit({
           topic: 'chess-game-ended',

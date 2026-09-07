@@ -3,6 +3,7 @@ import { Chess } from 'chess.js'
 import { randomUUID } from 'crypto'
 import { Emitter, FlowContextStateStreams, Logger } from 'motia'
 import { getCaptureScore } from './get-capture-score'
+import { persistGame, persistMove } from '../supabase/persistence'
 
 export type ActionMove = { from: string; to: string; promote?: 'queen' | 'rook' | 'bishop' | 'knight' }
 type Args = {
@@ -99,13 +100,17 @@ export const move = async ({
 
   const moveId = randomUUID()
 
-  await streams.chessGameMove.set(gameId, moveId, {
+  const moveRecord = await streams.chessGameMove.set(gameId, moveId, {
     color: player,
     fenBefore: game.fen,
     fenAfter: move.after,
     lastMove: [move.from, move.to],
     check: chess.inCheck(),
   })
+
+  // Durable copies (fire-and-forget; never blocks the move response).
+  persistGame(newGame)
+  persistMove(gameId, moveId, moveRecord)
 
   await emit({
     topic: 'evaluate-player-move',

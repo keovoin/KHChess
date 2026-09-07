@@ -5,6 +5,7 @@ import { generateGameScore } from '../../services/chess/generate-game-score'
 import { Scoreboard } from '@chessarena/types/game'
 import { Leaderboard } from '@chessarena/types/leaderboard'
 import { isAiGame } from '../../services/chess/utils'
+import { deleteLiveAiGame, persistGame, persistLeaderboard } from '../../services/supabase/persistence'
 
 /*
  * Warning: This can lead to race conditions if two games end at the same time.
@@ -39,14 +40,17 @@ export const handler: Handlers['GameEnded'] = async (input, { logger, streams })
   const moves = await streams.chessGameMove.getGroup(input.gameId)
   const scoreboard = generateGameScore(moves)
 
-  await streams.chessGame.set('game', game.id, { ...game, scoreboard })
+  const endedGame = await streams.chessGame.set('game', game.id, { ...game, scoreboard })
+  // Durable copy of the finished game (scoreboard included).
+  persistGame(endedGame)
 
   if (!isAiGame(game)) {
     return
   }
 
-  // let's delete the live AI game session
+  // let's delete the live AI game session (stream + durable copy)
   await streams.chessLiveAiGames.delete('game', game.id)
+  deleteLiveAiGame(game.id)
 
   /*
    * Initially, we're going to have only a global leaderboard
@@ -101,14 +105,18 @@ export const handler: Handlers['GameEnded'] = async (input, { logger, streams })
     }
   }
 
-  await streams.chessLeaderboard.set(
+  const whiteLb = await streams.chessLeaderboard.set(
     groupId,
     whiteModel,
     overrideLeaderboard('white', whiteModel, scoreboard, whiteLeaderboard),
   )
-  await streams.chessLeaderboard.set(
+  const blackLb = await streams.chessLeaderboard.set(
     groupId,
     blackModel,
     overrideLeaderboard('black', blackModel, scoreboard, blackLeaderboard),
   )
+
+  // Durable copies so the leaderboard survives redeploys.
+  persistLeaderboard(whiteModel, whiteLb)
+  persistLeaderboard(blackModel, blackLb)
 }

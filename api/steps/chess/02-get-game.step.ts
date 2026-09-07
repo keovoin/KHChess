@@ -5,6 +5,7 @@ import { getGameRole } from '../../services/chess/get-game-role'
 import { randomUserName } from '../../services/chess/random-user-name'
 import { UserState } from '../states/user-state'
 import { auth } from '../middlewares/auth.middleware'
+import { hydrateGame, resumeAiIfStalled } from '../../services/supabase/persistence'
 
 export const config: ApiRouteConfig = {
   type: 'api',
@@ -12,7 +13,7 @@ export const config: ApiRouteConfig = {
   description: 'Get a game',
   path: '/chess/game/:id',
   method: 'GET',
-  emits: [],
+  emits: ['chess-game-moved'],
   flows: ['chess'],
   middleware: [auth({ required: false })],
   bodySchema: z.object({}),
@@ -28,11 +29,23 @@ export const config: ApiRouteConfig = {
   },
 }
 
-export const handler: Handlers['GetGame'] = async (req, { logger, state, streams }) => {
+export const handler: Handlers['GetGame'] = async (req, { logger, state, streams, emit }) => {
   logger.info('Received getGame event')
 
   const gameId = req.pathParams.id
-  const game = await streams.chessGame.get('game', gameId)
+  let game = await streams.chessGame.get('game', gameId)
+
+  // Rehydrate from Postgres if a redeploy wiped the in-memory stream.
+  // No-op (fast path) when the game is already in memory.
+  if (!game) {
+    const { game: hydrated, hydrated: wasLoaded } = await hydrateGame(gameId, streams)
+    game = hydrated
+    if (wasLoaded) {
+      logger.info('Rehydrated game from Postgres', { gameId })
+      // A redeploy may have lost the in-flight AI turn — ask the AI to move again.
+      await resumeAiIfStalled(gameId, streams, emit).catch(() => false)
+    }
+  }
 
   if (!game) {
     return { status: 404, body: { message: 'Game not found' } }
