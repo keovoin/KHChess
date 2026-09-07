@@ -61,6 +61,10 @@ ENV NODE_ENV=production
 ENV HOST=0.0.0.0
 ENV PORT=3000
 ENV STOCKFISH_BIN_PATH=/app/api/lib/stockfish
+# The workbench boots a Vite dev server (React plugin, HMR, file watcher) that
+# starves Render's free tier: /chess/models took 5-10s in-container vs 0.2s
+# locally, and Render's 5s health check SIGTERM'd the container in a loop.
+ENV MOTIA_DOCKER_DISABLE_WORKBENCH=1
 
 WORKDIR /app/api
 EXPOSE 3000
