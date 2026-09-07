@@ -43,8 +43,9 @@ export const en: Record<string, string> = {
   'create.opponent': 'Who do you want to play?',
   'create.friendInvite': 'Challenge a friend',
   'create.friendInviteDesc': 'You play White — share the invite link',
-  'create.ai': 'Play against AI',
-  'create.aiDesc': 'Pick a model and take on the computer',
+  'create.ai': 'vs AI',
+  'create.aiVs': 'OR',
+  'create.aiDesc': 'Take on the computer',
   'create.selectColor': 'Select your color',
   'create.white': 'White',
   'create.black': 'Black',
@@ -80,6 +81,10 @@ export const en: Record<string, string> = {
   'admin.liveAi': 'Live AI Games',
   'admin.recentGames': 'Recent Games',
   'admin.noGames': 'No games yet.',
+  'admin.aiConfig': 'AI Model',
+  'admin.aiConfigDesc': 'Choose which model powers "vs AI" games. New games use this model; in-progress games keep their own.',
+  'admin.aiConfigSave': 'Save model',
+  'admin.aiConfigSaved': 'Saved',
 
   // General
   'common.back': 'Back',
@@ -129,7 +134,8 @@ export const kh: Record<string, string> = {
   'create.friendInvite': 'លេងជាមួយមិត្តភក្តិ',
   'create.friendInviteDesc': 'អ្នកលេងពណ៌បង្កាស់ — ចែករំលែកតំណអញ្ជើញ',
   'create.ai': 'លេងជាមួយ AI',
-  'create.aiDesc': 'ជ្រើសរើសម៉ូឌែល ហើយប្រកួតជាមួយកុំព្យូត័រ',
+  'create.aiVs': 'ឬ',
+  'create.aiDesc': 'ប្រកួតជាមួយកុំព្យូត័រ',
   'create.selectColor': 'ជ្រើសរើសពណ៌របស់អ្នក',
   'create.white': 'ពណ៌បង្កាស់',
   'create.black': 'ពណ៌ខ្មៅ',
@@ -165,6 +171,10 @@ export const kh: Record<string, string> = {
   'admin.liveAi': 'ការលេង AI ផ្ទាល់',
   'admin.recentGames': 'ការលេងថ្មីៗ',
   'admin.noGames': 'មិនទាន់មានការលេងទេ។',
+  'admin.aiConfig': 'ម៉ូឌែល AI',
+  'admin.aiConfigDesc': 'ជ្រើសរើសម៉ូឌែលដែលប្រើសម្រាប់ការលេង "vs AI"។ ការលេងថ្មីប្រើម៉ូឌែលនេះ ចំណែកការលេងកំពុងដំណើរការរក្សាម៉ូឌែលដើមរបស់វា។',
+  'admin.aiConfigSave': 'រក្សាទុកម៉ូឌែល',
+  'admin.aiConfigSaved': 'បានរក្សាទុក',
 
   // General
   'common.back': 'ត្រឡប់',

@@ -4,6 +4,7 @@ import mustache from 'mustache'
 import path from 'path'
 import { z } from 'zod'
 import { makePrompt } from '../../services/ai/make-prompt'
+import { resolveAiModel } from '../../services/ai/ai-config'
 import { evaluateBestMoves } from '../../services/chess/evaluate-best-moves'
 import { move } from '../../services/chess/move'
 
@@ -100,7 +101,7 @@ export const handler: Handlers['AI_Player'] = async (input, { logger, emit, stre
         zod: responseSchema,
         provider: player.ai,
         logger,
-        model: player.model!,
+        model: resolveAiModel(player.ai, player.model),
       })
 
       logger.info('Updating message', { messageId, gameId: input.gameId })

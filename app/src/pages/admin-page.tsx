@@ -1,5 +1,6 @@
 import { apiClient } from '@/lib/auth/api-client'
 import { useAuth } from '@/lib/auth/use-auth'
+import { AiConfigCard } from '@/components/admin/ai-config-card'
 import { TopBar } from '@/components/ui/top-bar'
 import { usePageTitle } from '@/lib/use-page-title'
 import { PageGrid, PageGridRightColumn } from '@/components/page-grid'
@@ -92,6 +93,8 @@ export const AdminPage = () => {
               <StatCard label={t('admin.games')} value={stats.totalGames} icon={<ShieldCheck className="size-4" />} />
               <StatCard label={t('admin.liveAi')} value={stats.liveAiGames} icon={<RefreshCw className="size-4" />} />
             </div>
+
+            <AiConfigCard />
 
             <div className="flex flex-col gap-2">
               <h2 className="text-white font-semibold">{t('admin.recentGames')}</h2>

@@ -30,8 +30,8 @@ export const CreateGame: React.FC<Props> = ({ onGameCreated, onCancel }) => {
 
     try {
       const game = await createGame({
-        white: { ai: players.white?.ai, model: players.white?.model },
-        black: { ai: players.black?.ai, model: players.black?.model },
+        white: { ai: players.white?.ai },
+        black: { ai: players.black?.ai },
       })
 
       onGameCreated(game.id)
@@ -52,14 +52,14 @@ export const CreateGame: React.FC<Props> = ({ onGameCreated, onCancel }) => {
 
   const onPlayerSubmit = (player: Player) => {
     if (setup?.opponent.kind === 'ai') {
-      if (!player.ai || !player.model) {
+      if (!player.ai) {
         toast(t('create.aiRequired'), {
           description: t('create.aiRequiredDesc'),
           position: 'bottom-center',
         })
         return
       }
-      void submit({ black: { ai: player.ai, model: player.model } })
+      void submit({ black: { ai: player.ai } })
       return
     }
 

@@ -8,17 +8,8 @@ import { auth } from '../middlewares/auth.middleware'
 import { UserState } from '../states/user-state'
 
 const refine = (data: Player, ctx: RefinementCtx) => {
-  if (data.ai && !data.model) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ['model'],
-      message: 'Model is required when AI is enabled',
-    })
-  }
-
   if (data.ai) {
     const isValidAiProvider = data.ai in supportedModelsByProvider
-    const isValidModel = data.model && supportedModelsByProvider[data.ai]?.includes(data.model)
 
     if (!isValidAiProvider) {
       ctx.addIssue({
@@ -28,7 +19,10 @@ const refine = (data: Player, ctx: RefinementCtx) => {
       })
     }
 
-    if (!isValidModel) {
+    // model is OPTIONAL: when omitted the server fills it from the admin
+    // AI config (single "vs AI" experience for players). When provided it
+    // must be a model supported by the provider.
+    if (data.model && !supportedModelsByProvider[data.ai]?.includes(data.model)) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['model'],
