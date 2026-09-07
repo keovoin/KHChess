@@ -17,6 +17,9 @@ export const openai: Handler = async ({ zod, model, logger, prompt }) => {
       type: 'json_schema',
       json_schema: { name: 'chess_move', schema: zodToJsonSchema(zod) },
     },
+    // vLLM-only param (not in OpenAI types): keep Qwen3 in non-thinking mode.
+    // Thinking ON adds ~12s/move (1400 reasoning tokens) vs ~1.5s without.
+    ...({ chat_template_kwargs: { enable_thinking: false } } as Record<string, unknown>),
   })
 
   logger.info('OpenAI response received', { model })

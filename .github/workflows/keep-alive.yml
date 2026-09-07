@@ -1,0 +1,26 @@
+name: Keep-Alive Ping
+
+# Pings the API every 10 minutes so the Render free tier never goes to sleep.
+# Without this, the first user click after ~15 min of inactivity eats an
+# ~18s cold start. The ping itself costs nothing (Actions free runner).
+
+on:
+  schedule:
+    # Every 10 minutes (cron granularity on GitHub is 5-min minimum)
+    - cron: '*/10 * * * *'
+  # Allow manual runs from the Actions tab if you want to warm it on demand
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping API
+        run: |
+          echo "Pinging khchess-api..."
+          START=$(date +%s)
+          # --max-time 120 so even a cold start (~18s) completes successfully.
+          # /chess/models is a public, lightweight GET (no auth needed).
+          CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 120 "https://khchess-api.onrender.com/chess/models")
+          END=$(date +%s)
+          echo "HTTP $CODE in $((END - START))s"
