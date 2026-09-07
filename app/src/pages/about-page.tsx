@@ -1,6 +1,5 @@
 import type React from 'react'
 import { useNavigate } from 'react-router'
-import { GithubStars } from '@/components/about/github-stars'
 import { PageGrid, PageGridRightColumn } from '@/components/page-grid'
 import { TopBar } from '@/components/ui/top-bar'
 import { usePageTitle } from '@/lib/use-page-title'
@@ -12,8 +11,6 @@ type ParagraphProps = React.PropsWithChildren<{ className?: string }>
 const Paragraph: React.FC<ParagraphProps> = ({ children, className }) => {
   return <p className={cn('font-medium text-white/90 w-full text-justify', className)}>{children}</p>
 }
-
-export const DISCORD_HANDLE = 'https://discord.com/invite/nJFfsH5d6v'
 
 export const AboutPage = () => {
   const navigate = useNavigate()
@@ -29,71 +26,35 @@ export const AboutPage = () => {
           <ChessArenaLogo className="mb-6" />
 
           <Paragraph>
-            Welcome to ChessArena.ai — a platform built to explore how large language models (LLMs) perform in chess
-            games.
+            Welcome to KHChess — a platform to explore how large language models (LLMs) perform in real chess games.
           </Paragraph>
 
           <Paragraph>
-            We created this platform using{' '}
-            <a href="https://motia.dev" target="_blank" className="text-white underline">
-              Motia
-            </a>{' '}
-            to have a leaderboard of the best models in chess, but after researching and validating LLMs to play chess,
-            we found that they can't really win games. This is because they don't have a good understanding of the game.
-          </Paragraph>
-          <Paragraph>
-            In fact, the majority of the matches end in draws. So instead of tracking wins and losses, we focus on move
-            quality and game insight. Each game is evaluated using{' '}
+            Pick a model, play it, or challenge a friend with an invite link. Each game is evaluated move-by-move with{' '}
             <a href="https://stockfishchess.org/" target="_blank" className="text-white underline">
               Stockfish
             </a>
-            , the world's strongest open-source chess engine.
+            , the world's strongest open-source chess engine, so we track move quality and game insight rather than just
+            wins and losses.
           </Paragraph>
 
           <h2 className="text-2xl font-title text-white my-4">How's it evaluated?</h2>
 
           <Paragraph>
-            On each move, we get what would be the best move using Stockfish to get the difference between the best move
-            and the move made by the LLM, that's called move swing. If move swing is higher than 100 centipawns, we
-            consider it a blunder.
+            On each move, we compare the model's move against Stockfish's best move to get the difference, called move
+            swing. If the move swing is higher than 100 centipawns, we consider it a blunder.
           </Paragraph>
 
-          <h2 className="text-2xl font-title text-white my-4">Is this project Open-Source?</h2>
+          <h2 className="text-2xl font-title text-white my-4">More</h2>
 
           <Paragraph>
-            Yes! This platform is built using{' '}
-            <a href="https://motia.dev" target="_blank" className="text-white underline">
-              Motia Framework
-            </a>{' '}
-            to showcase how simple it is to build a real-time application with Motia Streams. You can find the source
-            code of this project on{' '}
-            <a href="https://github.com/MotiaDev/chessarena-ai" target="_blank" className="text-white underline">
+            KHChess works offline as an installable app (PWA) and is available in English and Khmer. The source code is
+            open on{' '}
+            <a href="https://github.com/keovoin/KHChess" target="_blank" className="text-white underline">
               GitHub
             </a>
             .
           </Paragraph>
-
-          <Paragraph>
-            Motia is opensource under MIT license code-first framework designed to empower developers to build robust,
-            scalable, and observable event-driven systems with unparalleled ease. We handle the infrastructure
-            complexities, so you can focus on your business logic. Read our manifesto{' '}
-            <a href="https://motia.dev/manifesto" target="_blank" className="text-white underline">
-              here
-            </a>{' '}
-            and make sure to join our{' '}
-            <a href={DISCORD_HANDLE} target="_blank" className="text-white underline">
-              Discord
-            </a>{' '}
-            server.
-          </Paragraph>
-        </div>
-
-        <div className="flex flex-col gap-2 items-center justify-center w-full">
-          <p className="text-white font-semibold pb-2 text-center">Give our projects a star on GitHub!</p>
-          <div className="flex flex-row flex-wrap gap-2 items-center justify-center w-full">
-            <GithubStars repo="motia" defaultStars={1900} />
-            <GithubStars repo="chessarena-ai" defaultStars={10} />
-          </div>
         </div>
       </PageGridRightColumn>
     </PageGrid>

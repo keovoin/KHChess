@@ -18,7 +18,7 @@ export const LandingPage = () => {
     navigate('/about')
   }
 
-  usePageTitle('Powered by Motia')
+  usePageTitle('Play Chess Against AI')
 
   return (
     <PageGrid>

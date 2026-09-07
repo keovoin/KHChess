@@ -1,7 +1,7 @@
-/* ChessArena PWA service worker: app-shell + static asset caching.
+/* KHChess PWA service worker: app-shell + static asset caching.
  * Network-first for navigation (offline fallback to cached shell),
  * cache-first for static assets. Never touches /api or /ws. */
-const CACHE = 'chessarena-v1'
+const CACHE = 'khchess-v1'
 const SHELL = ['/', '/index.html', '/manifest.webmanifest']
 
 const STATIC_PREFIXES = [

@@ -3,9 +3,9 @@ export type Locale = 'en' | 'kh'
 // Flat key -> string dictionary per locale.
 export const en: Record<string, string> = {
   // Landing
-  'landing.welcome': 'Welcome to ChessArena.ai powered by Motia!',
+  'landing.welcome': 'Welcome to KHChess!',
   'landing.tagline':
-    'ChessArena.ai was created to show how leading models compete against each other in chess games.',
+    'KHChess lets leading AI models compete against each other — and against you — in real chess games.',
   'landing.learnMore': 'Click here to learn more.',
   'landing.openSource': 'This project is open-source, click',
   'landing.here': 'here',
@@ -60,7 +60,7 @@ export const en: Record<string, string> = {
   'invite.desc': 'Send them the link — they take the black seat',
   'invite.copy': 'Copy link',
   'invite.share': 'Share',
-  'invite.shareText': 'I challenged you to a chess game on ChessArena!',
+  'invite.shareText': 'I challenged you to a chess game on KHChess!',
   'invite.copied': 'Link copied!',
   'invite.waiting': 'Waiting for opponent to join…',
   'game.wins': 'wins!',
@@ -87,9 +87,9 @@ export const en: Record<string, string> = {
 
 export const kh: Record<string, string> = {
   // Landing
-  'landing.welcome': 'សូមស្វាគមន៍មកកាន់ ChessArena.ai ដោយ Motia!',
+  'landing.welcome': 'សូមស្វាគមន៍មកកាន់ KHChess!',
   'landing.tagline':
-    'ChessArena.ai ត្រូវបានបង្កើតឡើង ដើម្បីបង្ហាញពីរបៀបដែលម៉ូឌែល AI ដ៏ល្បីល្បាញ ប្រកួតប្រជែងគ្នាក្នុងការលេងស៊ែស។',
+    'KHChess ត្រូវបាបង្កើតឡើង ដើម្បីបង្ហាញពីរបៀបដែលម៉ូឌែល AI ដ៏ល្បីល្បាញ ប្រកួតប្រជែងគ្នាក្នុងការលេងចង្វាយ។',
   'landing.learnMore': 'ចុចនៅទីនេះដើម្បីស្វែងយល់បន្ថែម។',
   'landing.openSource': 'គម្រោងនេះជា open-source ចុច',
   'landing.here': 'នៅទីនេះ',
@@ -144,7 +144,7 @@ export const kh: Record<string, string> = {
   'invite.desc': 'ផ្ញើតំណនេះ — ពួកគេនឹងមកលេងកៅអីពណ៌ខ្មៅ',
   'invite.copy': 'ចម្លងតំណ',
   'invite.share': 'ចែករំលែក',
-  'invite.shareText': 'ខ្ញុំអញ្ជើញអ្នកលេងល្បែងសៀចង្វាយលើ ChessArena ហើយ!',
+  'invite.shareText': 'ខ្ញុំអញ្ជើញអ្នកលេងល្បែងសៀចង្វាយលើ KHChess ហើយ!',
   'invite.copied': 'បានចម្លងតំណហើយ!',
   'invite.waiting': 'កំពុងរង់ចាំគូប្រកួតមកចូលលេង…',
   'game.wins': 'ឈ្នះ!',

@@ -1,6 +1,6 @@
 {
-  "name": "ChessArena",
-  "short_name": "ChessArena",
+  "name": "KHChess",
+  "short_name": "KHChess",
   "description": "Play chess against top AI models and friends. English + Khmer.",
   "id": "/",
   "start_url": "/",

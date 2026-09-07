@@ -1,4 +1,4 @@
-import { MotiaPowered } from '@/components/motia-powered'
+import { KhChessBrand } from '@/components/ui/khchess-brand'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Panel } from '@/components/ui/panel'
@@ -80,7 +80,7 @@ export const ChessGame: React.FC<Props> = ({ gameId, onClose }) => {
           <Button variant="default" className="h-8 w-8 xl:h-12 xl:w-12" onClick={onClose}>
             <ArrowLeft className="size-4" />
           </Button>
-          <MotiaPowered size="sm" githubLogo />
+          <KhChessBrand size="sm" />
           <div className="flex flex-row gap-2 items-center justify-end">
             <ChessShare />
           </div>
@@ -95,7 +95,7 @@ export const ChessGame: React.FC<Props> = ({ gameId, onClose }) => {
                 <ArrowLeft className="size-5" />
               </Button>
 
-              <MotiaPowered size="sm" githubLogo />
+              <KhChessBrand size="sm" />
               <ChessShare />
             </header>
 

@@ -29,7 +29,7 @@ export const ChessInviteCard: React.FC<Props> = ({ gameId }) => {
   const onShare = async () => {
     if (navigator.share) {
       try {
-        await navigator.share({ title: 'ChessArena', text: t('invite.shareText'), url: inviteUrl })
+        await navigator.share({ title: 'KHChess', text: t('invite.shareText'), url: inviteUrl })
       } catch {
         // dismissed by user
       }

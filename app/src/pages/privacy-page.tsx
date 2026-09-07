@@ -27,16 +27,16 @@ export const PrivacyPage = () => {
           <div>
             <h2 className="text-2xl font-title text-white mb-4">Privacy Policy</h2>
             <Paragraph>
-              <strong>Effective Date:</strong> August 16, 2025
+              <strong>Effective Date:</strong> September 7, 2026
             </Paragraph>
             <Paragraph>
-              Motia ("we," "our," or "us") respects your privacy and is committed to protecting it. This Privacy Policy
-              explains how we collect, use, and share information when you use our application.
+              KHChess ("we," "our," or "us") respects your privacy and is committed to protecting it. This Privacy
+              Policy explains how we collect, use, and share information when you use our application.
             </Paragraph>
 
             <h3 className="text-2xl font-title text-white my-4">1. Information We Collect</h3>
             <Paragraph>
-              When you sign in to Motia with your Google account, we only request access to the following public
+              When you sign in to KHChess with your Google account, we only request access to the following public
               information:
             </Paragraph>
             <ul className="list-disc list-inside text-white ml-4">
@@ -79,7 +79,7 @@ export const PrivacyPage = () => {
             </Paragraph>
             <Paragraph>
               If you wish to delete your account and associated data, you may contact us at{' '}
-              <strong>contact@motia.dev</strong>.
+              <strong>contact@khchess.com</strong>.
             </Paragraph>
 
             <h3 className="text-2xl font-title text-white my-4">6. Children’s Privacy</h3>
@@ -96,7 +96,7 @@ export const PrivacyPage = () => {
             <h3 className="text-2xl font-title text-white my-4">8. Contact Us</h3>
             <Paragraph>If you have any questions about this Privacy Policy, please contact us at:</Paragraph>
             <Paragraph>
-              <strong>Email:</strong> contact@motia.dev
+              <strong>Email:</strong> contact@khchess.com
             </Paragraph>
           </div>
         </div>
