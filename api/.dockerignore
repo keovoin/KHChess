@@ -1,0 +1,7 @@
+node_modules
+python_modules
+dist
+.motia
+.vercel
+*.log
+.env

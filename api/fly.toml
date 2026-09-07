@@ -1,0 +1,25 @@
+app = "khchess-api"
+primary_region = "sgp"  # closest to Cambodia
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+  auto_stop_machines = false   # keep state alive; enable to save $ when idle
+  auto_start_machines = true
+
+[build]
+  dockerfile = "Dockerfile"
+  build-target = "app"
+
+[env]
+  NODE_ENV = "production"
+
+# Mount a persistent volume so game/user state (.motia/) survives restarts
+[[mounts]]
+  source = "motia_state"
+  destination = "/app/.motia"
+
+[volume]
+  name = "motia_state"
+  region = "sgp"
+  size = "1gb"
