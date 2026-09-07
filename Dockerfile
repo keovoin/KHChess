@@ -11,11 +11,15 @@
 FROM node:20-bookworm-slim
 
 # --- System deps: Python (for the Motia Python step) + curl (Stockfish download) ---
+# python-is-python3: Motia's `motia install` looks for `python` (or `python3.13`);
+# node-slim only ships `python3`, so this symlink is required or the build fails
+# with "No compatible Python 3 installation found".
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         python3 \
         python3-pip \
         python3-venv \
+        python-is-python3 \
         curl \
         ca-certificates \
     && rm -rf /var/lib/apt/lists/*
@@ -60,5 +64,5 @@ ENV STOCKFISH_BIN_PATH=/app/api/lib/stockfish
 WORKDIR /app/api
 EXPOSE 3000
 
-# Runs the Motia production server.
-CMD ["npx", "motia", "start"]
+# Render injects a random PORT; `motia start` ignores $PORT by default, so pass it.
+CMD ["sh", "-c", "exec npx motia start -p ${PORT:-3000}"]
