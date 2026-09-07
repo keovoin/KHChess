@@ -36,5 +36,5 @@ ENV NODE_ENV=production \
 
 EXPOSE 3000
 
-# .motia/ = game/user state (file-based). Mount a persistent volume here!
-CMD ["sh", "-c", "npm start"]
+# Render injects PORT (10000+); motia start needs it passed explicitly
+CMD ["sh", "-c", "exec motia start -p ${PORT:-3000}"]
