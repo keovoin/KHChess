@@ -1,6 +1,7 @@
 import chess
 import chess.engine
 import os
+from pathlib import Path
 from pydantic import BaseModel, Field
 
 class EvaluatePlayerMoveInput(BaseModel):
@@ -18,8 +19,31 @@ config = {
     "emits": [],
     "flows": ["chess"],
     "input": EvaluatePlayerMoveInput.model_json_schema(),
-    "includeFiles": ["../../lib/stockfish"]
+    "includeFiles": ["../../lib/stockfish/stockfish-linux-x86-64-universal"]
 }
+
+# Binary names to look for, in priority order (cloud runs Linux, local dev runs Windows/macOS)
+STOCKFISH_BINARY_CANDIDATES = [
+    "stockfish-linux-x86-64-universal",
+    "stockfish-windows-x86-64-sse41-popcnt.exe",
+    "stockfish-ubuntu-x86-64-avx2",
+    "stockfish-macos-m1-apple-silicon",
+    "stockfish",
+]
+
+def _find_stockfish() -> str | None:
+    """Locate the stockfish binary: STOCKFISH_BIN_PATH env first, then the bundled folder."""
+    env_path = os.getenv("STOCKFISH_BIN_PATH")
+    if env_path and Path(env_path).exists():
+        return env_path
+    # includeFiles bundles lib/stockfish next to the step package root
+    root = Path(__file__).resolve().parents[2]
+    bundled = root / "lib" / "stockfish"
+    for name in STOCKFISH_BINARY_CANDIDATES:
+        candidate = bundled / name
+        if candidate.exists():
+            return str(candidate)
+    return None
 
 class Evaluation(BaseModel):
     centipawn_score: int = Field(description="The evaluation in centipawns")
@@ -63,10 +87,10 @@ async def handler(input: EvaluatePlayerMoveInput, ctx):
         raise ValueError("Both fenBefore and fenAfter must be provided")
 
     # Initialize Stockfish engine
-    engine_path = os.getenv("STOCKFISH_BIN_PATH")
+    engine_path = _find_stockfish()
     if not engine_path:
-        logger.error("STOCKFISH_BIN_PATH environment variable not set")
-        raise EnvironmentError("STOCKFISH_BIN_PATH environment variable not set")
+        logger.error("Stockfish binary not found", { "candidates": STOCKFISH_BINARY_CANDIDATES })
+        raise EnvironmentError("Stockfish binary not found (set STOCKFISH_BIN_PATH or bundle lib/stockfish)")
     
     logger.info("Initializing Stockfish engine", { "enginePath": engine_path })
     _, engine = await chess.engine.popen_uci(engine_path)

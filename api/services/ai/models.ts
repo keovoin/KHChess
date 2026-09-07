@@ -2,7 +2,7 @@ import { AiModelProvider, AiModels, AiProviderDefaultModel } from '@chessarena/t
 
 // NOTE: these are the models used for AI vs AI games, it is also used for backwards compatibility for existing games that don't have a model assigned to a player
 export const models: AiProviderDefaultModel = {
-  openai: 'o4-mini-2025-04-16',
+  openai: 'Qwen3.8-27B',
   gemini: 'gemini-2.5-flash',
   claude: 'claude-sonnet-4-20250514',
   grok: 'grok-3',
@@ -11,6 +11,7 @@ export const models: AiProviderDefaultModel = {
 // NOTE: these are all the models supported by provider that users can pick in order to play human vs AI games
 export const supportedModelsByProvider: AiModels = {
   openai: [
+    'Qwen3.8-27B',
     // https://platform.openai.com/docs/models
     'gpt-5-2025-08-07',
     'o4-mini-2025-04-16',
