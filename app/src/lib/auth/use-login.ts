@@ -10,7 +10,7 @@ type LoginState = {
   } | null
 }
 
-type LoginProvider = 'google' | 'twitter' | 'email'
+type LoginProvider = 'google' | 'twitter' | 'email' | 'telegram'
 
 type AuthError = {
   error: string
@@ -31,7 +31,7 @@ const formatErrorMessage = (error: AuthError): string => {
 }
 
 export const useLogin = () => {
-  const { loginWithOAuth, loginWithOtp, verifyOtp, authError, isAuthenticated, isLoading } = useAuth()
+  const { loginWithOAuth, loginWithOtp, loginWithTelegram, verifyOtp, authError, isAuthenticated, isLoading } = useAuth()
   const [state, setState] = useState<LoginState>(INITIAL_STATE)
   const navigate = useNavigate()
 
@@ -63,6 +63,16 @@ export const useLogin = () => {
           success: {
             title: 'Email sent',
             description: 'Check your email for a magic link to sign in.',
+          },
+        }))
+      } else if (provider === 'telegram') {
+        await loginWithTelegram()
+
+        setState((prev) => ({
+          ...prev,
+          success: {
+            title: 'Please wait',
+            description: 'Confirming your Telegram login...',
           },
         }))
       } else {

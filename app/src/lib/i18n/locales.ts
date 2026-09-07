@@ -29,6 +29,7 @@ export const en: Record<string, string> = {
   // Login
   'login.title': 'Login',
   'login.google': 'Continue with Google',
+  'login.telegram': 'Continue with Telegram',
   'login.or': 'Or',
   'login.emailPlaceholder': 'Enter your email',
   'login.continue': 'Continue',
@@ -113,6 +114,7 @@ export const kh: Record<string, string> = {
   // Login
   'login.title': 'ចូលគណនី',
   'login.google': 'បន្តជាមួយ Google',
+  'login.telegram': 'បន្តជាមួយ Telegram',
   'login.or': 'ឬ',
   'login.emailPlaceholder': 'បញ្ចូល email របស់អ្នក',
   'login.continue': 'បន្ត',

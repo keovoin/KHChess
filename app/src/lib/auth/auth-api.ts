@@ -19,4 +19,8 @@ export const authApi = {
   // Mint a guest (no-account) token from the API.
   guestToken: async (): Promise<{ accessToken: string; user: User }> =>
     apiClient.post<{ accessToken: string; user: User }>('/auth/guest-token', {}),
+
+  // Exchange verified Telegram Login Widget / WebApp initData for an app token.
+  telegramLogin: async (initData: string): Promise<{ accessToken: string; user: User }> =>
+    apiClient.post<{ accessToken: string; user: User }>('/auth/telegram-login', { initData }),
 }

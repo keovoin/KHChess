@@ -173,6 +173,73 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [setUser])
 
+  // Log in with Telegram (Login Widget on the web, WebApp initData in-app).
+  const loginWithTelegram = useCallback(async (): Promise<void> => {
+    setIsLoading(true)
+    setAuthError(null)
+
+    const finish = (initData: string) =>
+      (async () => {
+        try {
+          const result = await authApi.telegramLogin(initData)
+          apiClient.setAuthToken(result.accessToken)
+          setUser(result.user)
+          const redirect = localStorage.getItem('chessarena-redirect')
+          if (redirect) {
+            navigate(redirect)
+            localStorage.removeItem('chessarena-redirect')
+          }
+        } catch (error: unknown) {
+          console.error('Telegram login error:', error)
+          setAuthError(handleAuthError(error))
+          throw error
+        } finally {
+          setIsLoading(false)
+        }
+      })()
+
+    try {
+      // Inside the Telegram app: the SDK hands us initData directly.
+      const tg = window.Telegram?.WebApp
+      if (tg?.initData && tg.initData.length > 0) {
+        await finish(tg.initData)
+        return
+      }
+
+      // On the web: show the official Telegram Login Widget.
+      const tgApi = window.Telegram as unknown as {
+        Login?: new (opts: {
+          bot_username: string
+          request_access?: boolean
+          onauth: (data: { initData: string }) => void
+          onfailure?: (error?: { description?: string }) => void
+          onclose?: () => void
+        }) => { render: () => void }
+        WebApp?: { ready: () => void; initData?: string }
+      }
+      if (!tgApi?.Login) throw new Error('Telegram widget unavailable')
+      tgApi.WebApp?.ready()
+      const widget = new tgApi.Login({
+        bot_username: (import.meta.env.VITE_TELEGRAM_BOT_USERNAME ?? 'Khchess_bot') as string,
+        request_access: false,
+        onauth: (data: { initData: string }) => {
+          void finish(data.initData)
+        },
+        onfailure: () => {
+          setIsLoading(false)
+        },
+        onclose: () => {
+          setIsLoading(false)
+        },
+      })
+      widget.render()
+    } catch (error: unknown) {
+      console.error('Telegram login error:', error)
+      setAuthError(handleAuthError(error))
+      throw error
+    }
+  }, [navigate, setUser])
+
   const logout = useCallback(async (): Promise<void> => {
     setIsLoading(true)
     setAuthError(null)
@@ -203,11 +270,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       login,
       loginWithOtp,
       loginWithOAuth,
+      loginWithTelegram,
       loginAsGuest,
       logout,
       verifyOtp,
     }),
-    [user, isAuthenticated, isAdmin, isLoading, authError, login, loginWithOtp, loginWithOAuth, loginAsGuest, logout, verifyOtp],
+    [user, isAuthenticated, isAdmin, isLoading, authError, login, loginWithOtp, loginWithOAuth, loginWithTelegram, loginAsGuest, logout, verifyOtp],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

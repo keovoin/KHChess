@@ -23,6 +23,7 @@ export interface AuthContextType {
   loginWithOtp: (email: string) => Promise<void>
   verifyOtp: (email: string, token: string) => Promise<void>
   loginWithOAuth: (provider: 'google' | 'twitter') => Promise<void>
+  loginWithTelegram: () => Promise<void>
   loginAsGuest: () => Promise<void>
   logout: () => Promise<void>
 }

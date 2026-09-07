@@ -29,6 +29,7 @@ declare module 'motia' {
     'AvailableModels': ApiRouteHandler<{}, ApiResponse<200, { models: { openai: string[]; gemini: string[]; claude: string[]; grok: string[] } }> | ApiResponse<400, { message: string }> | ApiResponse<404, { message: string }>, never>
     'RequestAccess': ApiRouteHandler<Record<string, unknown>, ApiResponse<200, {}> | ApiResponse<400, { message: string }> | ApiResponse<404, { message: string }>, never>
     'AcceptRequestAccess': ApiRouteHandler<{ userId: string }, ApiResponse<200, {}> | ApiResponse<400, { message: string }> | ApiResponse<404, { message: string }>, never>
+    'TelegramLogin': ApiRouteHandler<{ initData: string }, ApiResponse<200, { accessToken: string; user: { id: string; name: string; profilePic: string; email: string } }> | ApiResponse<400, { error: string }> | ApiResponse<500, { error: string }>, never>
     'GuestToken': ApiRouteHandler<{}, ApiResponse<200, { accessToken: string; user: { id: string; name: string; profilePic: string; email: string } }> | ApiResponse<500, { error: string }>, never>
     'GetUser': ApiRouteHandler<Record<string, unknown>, ApiResponse<200, { id: string; name: string; profilePic: string }> | ApiResponse<404, { message: string }>, never>
     'Auth': ApiRouteHandler<{ authToken: string }, ApiResponse<200, { accessToken: string; user: { id: string; name: string; profilePic: string; email: string } }> | ApiResponse<401, { error: string }> | ApiResponse<500, { error: string }>, never>
