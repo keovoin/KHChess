@@ -89,8 +89,11 @@ async def handler(input: EvaluatePlayerMoveInput, ctx):
     # Initialize Stockfish engine
     engine_path = _find_stockfish()
     if not engine_path:
-        logger.error("Stockfish binary not found", { "candidates": STOCKFISH_BINARY_CANDIDATES })
-        raise EnvironmentError("Stockfish binary not found (set STOCKFISH_BIN_PATH or bundle lib/stockfish)")
+        # Stockfish is an OPTIONAL blunder-annotation enhancement. Its absence
+        # must NEVER fail the move flow (a thrown handler stalls the chess event
+        # loop and delays the AI move). Log + skip.
+        logger.warning("Stockfish not available — skipping move evaluation", { "candidates": STOCKFISH_BINARY_CANDIDATES })
+        return
     
     logger.info("Initializing Stockfish engine", { "enginePath": engine_path })
     _, engine = await chess.engine.popen_uci(engine_path)
