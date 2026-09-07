@@ -3,10 +3,13 @@ import './index.css'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import App from './App.tsx'
+import { RootErrorBoundary } from './components/root-error-boundary'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <App />
+    <RootErrorBoundary>
+      <App />
+    </RootErrorBoundary>
   </StrictMode>,
 )
 
