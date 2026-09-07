@@ -15,4 +15,8 @@ export const authApi = {
 
     return response
   },
+
+  // Mint a guest (no-account) token from the API.
+  guestToken: async (): Promise<{ accessToken: string; user: User }> =>
+    apiClient.post<{ accessToken: string; user: User }>('/auth/guest-token', {}),
 }

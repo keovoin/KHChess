@@ -32,5 +32,7 @@ declare module 'motia' {
     'GetUser': ApiRouteHandler<Record<string, unknown>, ApiResponse<200, { id: string; name: string; profilePic: string }> | ApiResponse<404, { message: string }>, never>
     'Auth': ApiRouteHandler<{ authToken: string }, ApiResponse<200, { accessToken: string; user: { id: string; name: string; profilePic: string; email: string } }> | ApiResponse<401, { error: string }> | ApiResponse<500, { error: string }>, never>
     'EvaluatePlayerMove': EventHandler<{ fenBefore: string; fenAfter: string; gameId: string; moveId: string; player: string }, never>
+    'GuestToken': ApiRouteHandler<{}, ApiResponse<200, { accessToken: string; user: { id: string; name: string; profilePic: string; email: string } }> | ApiResponse<500, { error: string }>, never>
+    'AdminStats': ApiRouteHandler<{}, ApiResponse<200, { totalUsers: number; totalGuests: number; totalGames: number; liveAiGames: number; recentGames: { id: string; status: string; createdAt?: string }[] }> | ApiResponse<403, { error: string }>, never>
   }
 }

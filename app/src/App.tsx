@@ -11,26 +11,31 @@ import { AboutPage } from './pages/about-page'
 import { LoginPage } from './pages/login-page'
 import { AuthProvider } from './components/auth/auth-provider'
 import { PrivacyPage } from './pages/privacy-page'
+import { AdminPage } from './pages/admin-page'
+import { I18nProvider } from './lib/i18n'
 
 function App() {
   return (
-    <MotiaStreamProvider address={socketUrl}>
-      <BrowserRouter>
-        <AuthProvider>
-          <Routes>
-            <Route path="/" element={<LandingPage />} />
-            <Route path="/login" element={<LoginPage />} />
-            <Route path="/live-matches" element={<LiveMatchesPage />} />
-            <Route path="/new" element={<CreateGamePage />} />
-            <Route path="/leaderboard" element={<LeaderboardPage />} />
-            <Route path="/game/:gameId" element={<ChessGamePage />} />
-            <Route path="/about" element={<AboutPage />} />
-            <Route path="/privacy-policy" element={<PrivacyPage />} />
-          </Routes>
-        </AuthProvider>
-      </BrowserRouter>
+    <I18nProvider>
+      <MotiaStreamProvider address={socketUrl}>
+        <BrowserRouter>
+          <AuthProvider>
+            <Routes>
+              <Route path="/" element={<LandingPage />} />
+              <Route path="/login" element={<LoginPage />} />
+              <Route path="/live-matches" element={<LiveMatchesPage />} />
+              <Route path="/new" element={<CreateGamePage />} />
+              <Route path="/leaderboard" element={<LeaderboardPage />} />
+              <Route path="/game/:gameId" element={<ChessGamePage />} />
+              <Route path="/about" element={<AboutPage />} />
+              <Route path="/privacy-policy" element={<PrivacyPage />} />
+              <Route path="/admin" element={<AdminPage />} />
+            </Routes>
+          </AuthProvider>
+        </BrowserRouter>
+      </MotiaStreamProvider>
       <Toaster />
-    </MotiaStreamProvider>
+    </I18nProvider>
   )
 }
 

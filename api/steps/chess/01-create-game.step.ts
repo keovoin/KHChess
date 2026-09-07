@@ -79,7 +79,15 @@ export const handler: Handlers['CreateGame'] = async (req, { logger, emit, state
   logger.info('[CreateGame] Received createGame event')
 
   const userState = new UserState(state)
-  const user = await userState.getUser(req.tokenInfo.sub)
+  let user = await userState.getUser(req.tokenInfo.sub)
+
+  // Guest tokens are minted on demand; ensure the guest user exists in state.
+  if (!user) {
+    const isGuest = !!req.tokenInfo?.guest
+    const name = isGuest ? 'Guest' : req.tokenInfo?.sub.split('@')[0] ?? 'Player'
+    user = { id: req.tokenInfo.sub, name, profilePic: '', email: '' }
+    await userState.setUser(req.tokenInfo.sub, user)
+  }
   const validationResult = bodySchema.safeParse(req.body)
 
   if (!user) {

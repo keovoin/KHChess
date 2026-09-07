@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { AiModelProviderSchema } from './ai-models'
+import { publicUserSchema } from './user'
 
 const playerScore = () =>
   z.object({
@@ -61,6 +62,9 @@ export const GameSchema = z.object({
   }),
   check: z.boolean({ description: 'Whether the game is in check' }),
   scoreboard: ScoreboardSchema.optional(),
+  pendingAccessRequests: z
+    .array(z.object({ user: publicUserSchema }))
+    .optional(),
 })
 
 export const roleSchema = z.enum(['white', 'black', 'spectator', 'root'])

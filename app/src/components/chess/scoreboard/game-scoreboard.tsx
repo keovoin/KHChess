@@ -1,4 +1,5 @@
 import { Card } from '@/components/ui/card'
+import { useTranslation } from '@/lib/i18n'
 import type { Game } from '@chessarena/types/game'
 import { useScrollIntoView } from '@/lib/use-scroll-into-view'
 import { Info, Loader2 } from 'lucide-react'
@@ -53,6 +54,8 @@ const PlayerCard: React.FC<ScoreboardProps> = ({ game }) => {
 export const Scoreboard: React.FC<ScoreboardProps> = ({ game }) => {
   const scoreboard = game.scoreboard
   const ref = useScrollIntoView()
+  const { t } = useTranslation()
+  const hasAi = !!game.players.white.ai || !!game.players.black.ai
 
   return (
     <Card className="bg-black/20 rounded-xl mt-4 p-0" ref={ref}>
@@ -107,7 +110,7 @@ export const Scoreboard: React.FC<ScoreboardProps> = ({ game }) => {
             </div>
           )}
         </>
-      ) : (
+      ) : hasAi ? (
         <div className="p-4">
           <div className="flex flex-col">
             <Loader2 className="w-8 h-8 mx-auto animate-spin text-muted-foreground" />
@@ -115,6 +118,23 @@ export const Scoreboard: React.FC<ScoreboardProps> = ({ game }) => {
             <div className="text-md mx-auto text-center w-full text-muted-foreground">
               The scoreboard should be ready in a few seconds.
             </div>
+          </div>
+        </div>
+      ) : (
+        <div className="p-4">
+          <div className="flex flex-col items-center gap-1">
+            <div className="text-2xl text-white font-bold mx-auto text-center w-full">
+              {game.winner ? (
+                <>
+                  <span className="capitalize">{game.winner}</span> {t('game.wins')}
+                </>
+              ) : (
+                t('game.draw')
+              )}
+            </div>
+            {game.endGameReason && (
+              <div className="text-md mx-auto text-center w-full text-muted-foreground">{game.endGameReason}</div>
+            )}
           </div>
         </div>
       )}
