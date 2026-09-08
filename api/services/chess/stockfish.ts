@@ -1,70 +1,60 @@
-import { spawn, type ChildProcess } from 'child_process'
+import net from 'net'
 import { Chess } from 'chess.js'
 import fs from 'fs'
 import path from 'path'
 import os from 'os'
 
 /**
- * Stockfish UCI client — the "bot" move engine (replaces the LLM path).
+ * Stockfish client — talks to the shared engine daemon (engine-daemon.js).
  *
- * Design notes
- *  ───────────
- *  • A small POOL of persistent engine processes (UCI over stdio).
- *    Spawning + initialising Stockfish costs ~1-4s wall on this 0.5-CPU
- *    instance, so reusing engines is what makes a move "near-instant":
- *    the search itself is only BOT_MOVETIME_MS (~200ms).
- *  • One move per engine at a time (UCI is sequential); extra concurrent
- *    games queue (FIFO).
- *  • The single engine stays resident for the container lifetime — the
- *    first search pays the NNUE net load (~5-9s wall on 0.5 CPU), so
- *    re-spawning per idle gap would make every bot move pay it again.
- *  • A search that exceeds the wall timeout is cancelled (`stop`), NOT
- *    abandoned: abandoning it while the one-shot fallback spawns a 2nd
- *    engine OOMs the 512MB container (2 × ~133MB NNUE nets).
- *  • Fallback: if the pool engine dies, a fresh one-shot engine is tried.
+ * WHY A DAEMON (not an in-process engine)
+ * ───────────────────────────────────────
+ * Motia runs every step request in a fresh, short-lived Node worker. An
+ * in-module engine pool is therefore per-worker: the /chess/models step and
+ * the ai-player step each spawned their own ~133MB Stockfish (embedded NNUE
+ * net) and two concurrent workers OOM-killed the 512MB Render container in
+ * a loop (verified via Render events: `oomKilled: 512Mi` ×3).
  *
- *  Capacity: 25 concurrent live games → each turn is one ~200ms search +
- *  ~20ms protocol; engines are shared, so CPU stays tiny. 50 DAU is a
- *  non-issue (see SESSION_LOG capacity note).
+ * One long-lived daemon (`engine-daemon.js`, started by the container
+ * entrypoint) owns the single Stockfish process and serves ALL workers over
+ * localhost TCP with a FIFO queue. Regardless of how many step workers are
+ * alive at once, exactly one engine exists → RAM stays ~320-400MB < 512MB.
+ *
+ * This module is the client side: connect → send one JSON line
+ * `{"fen","movetime"}` → read one JSON line → close. Connection is
+ * per-call (~1-3ms local), so there is no long-lived socket to babysit and
+ * no per-worker state to leak.
+ *
+ * LOCAL DEV: if the daemon isn't running (dev machines), `ensureDaemon`
+ * spawns it on demand (same binary candidates as before).
  */
 
 export type EngineMove = {
   move: string
   depth?: number
   scoreCp?: number
+  mate?: number
   /** engine reported no legal move (checkmate / stalemate position) */
   noMove?: boolean
 }
 export type EngineInfo = { depth: number; scoreCp?: number; pv?: string[] }
 
-// NOTE: on a 0.5-CPU instance "movetime" counts CPU time, so 500ms of
-// search took 2-4s wall. 200ms keeps replies snappy and the bot still plays
-// at depth ~10-14, far above casual-opponent strength.
+// 200ms of CPU-time search ≈ depth 10-18, far above casual strength; on the
+// 0.5-CPU prod instance it costs ~2-10s wall (NNUE load + CPU share).
 export const BOT_MOVETIME_MS = 200
 export const STOCKFISH_MODEL = 'stockfish-19'
 export const isEngineModel = (model?: string): boolean => model === STOCKFISH_MODEL
 
-// Capacity budget: 512MB instance. Each Stockfish process holds ~133MB
-// (embedded NNUE net) + hash — 2 engines OOM the container (verified:
-// crash-loop). ONE warm engine; all games queue FIFO on it (each move is
-// ~250ms, so even a 25-game surge tails out at ~6-10s worst case, CPU
-// stays near zero, RAM stays ~320MB).
-const POOL_MAX = 1
-// Keep the single engine alive for the lifetime of the container. The NNUE
-// net load on first search costs ~5-9s wall on a cold 0.5-CPU instance;
-// respawning after every idle gap would make every bot move pay that again.
-// One resident engine (~133MB) fits the 512MB budget with the Node runtime.
-const IDLE_MS = Number.MAX_SAFE_INTEGER
+const DAEMON_HOST = process.env.STOCKFISH_DAEMON_HOST || '127.0.0.1'
+const DAEMON_PORT = Number(process.env.STOCKFISH_DAEMON_PORT || 7878)
 const DEFAULT_TIMEOUT_MS = 30000
-const HANDSHAKE_TIMEOUT_MS = 15000
-const ENGINE_HASH_MB = 16
+const DEV_SPAWN_TIMEOUT_MS = 20000
 
 const findStockfishCandidates = (): string[] => {
   const out: string[] = []
   const pushIf = (p?: string) => {
     if (!p || out.includes(p) || !fs.existsSync(p)) return
     if (fs.statSync(p).isDirectory()) {
-      // A directory (local layout) — pick the platform binary inside.
       const names = os.platform() === 'win32'
         ? ['stockfish-windows-x86-64-sse41-popcnt.exe', 'stockfish-windows-x86-64-avx2-popcnt.exe']
         : ['stockfish-linux-x86-64-universal', 'stockfish-linux-x86-64-avx2-popcnt']
@@ -73,12 +63,9 @@ const findStockfishCandidates = (): string[] => {
     }
     out.push(p)
   }
-  // 1. Explicit override (Dockerfile ENV or local dev).
   pushIf(process.env.STOCKFISH_BIN_PATH)
-  // 2. Root Dockerfile builds the app at /app; the engine binary is a FILE.
   pushIf('/app/api/lib/stockfish')
   pushIf('/app/api/lib/stockfish/stockfish-linux-x86-64-universal')
-  // 3. Local dev layout.
   const here = __dirname
   for (const rel of [
     path.join(here, '../../lib/stockfish'),
@@ -86,7 +73,6 @@ const findStockfishCandidates = (): string[] => {
     path.join(here, '../../lib/stockfish/stockfish-windows-x86-64-sse41-popcnt.exe'),
     path.join(here, 'lib/stockfish/stockfish-linux-x86-64-universal'),
   ]) pushIf(rel)
-  // 4. System PATH.
   const which = os.platform() === 'win32' ? 'where' : 'which'
   try {
     const { execSync } = require('child_process') as typeof import('child_process')
@@ -101,347 +87,137 @@ const findStockfishCandidates = (): string[] => {
   return out
 }
 
-type Waiting = { resolve: (r: EngineMove) => void; reject: (e: unknown) => void; timer: NodeJS.Timeout }
-
-class UciSession {
-  private child?: ChildProcess
-  private buf = ''
-  private state: 'uci' | 'options' | 'setpos' | 'search' = 'uci'
-  private busy = false
-  private idleTimer?: NodeJS.Timeout
-  private dead = false
-  private readonly queue: Waiting[] = []
-  // Last search info (reset after each bestmove) — for result metadata.
-  private lastDepth?: number
-  private lastCp?: number
-  private lastMate?: number
-  // Set when we send `stop` after a timeout: the engine then emits the
-  // cancelled search's bestmove next (UCI stdin is processed in order), so
-  // exactly one bestmove must be discarded — otherwise it would be
-  // attributed to the next, unrelated search.
-  private discardNextBestmove = false
-
-  get alive(): boolean {
-    return !this.dead && !!this.child
-  }
-  get isBusy(): boolean {
-    return this.busy
-  }
-  get isDead(): boolean {
-    return this.dead
-  }
-
-  /** Resolve when this session can take a new move (or spawn a child). */
-  async ready(): Promise<boolean> {
-    if (this.dead) return false
-    if (!this.child) {
-      this.spawn()
-      await new Promise<void>((res) => {
-        const t0 = Date.now()
-        const iv = setInterval(() => {
-          if (this.state === 'search' || this.dead || Date.now() - t0 > HANDSHAKE_TIMEOUT_MS) {
-            clearInterval(iv)
-            res()
-          }
-        }, 50)
-      })
-      return this.state === 'search' && !this.dead
-    }
-    if (this.busy) {
-      await new Promise<void>((res) => {
-        const iv = setInterval(() => {
-          if (!this.busy || this.dead) {
-            clearInterval(iv)
-            res()
-          }
-        }, 50)
-      })
-      return !this.dead
-    }
-    return true
-  }
-
-  private spawn(): void {
-    const candidates = findStockfishCandidates()
-    if (!candidates.length) {
-      this.dead = true
-      return
-    }
-    let child: ChildProcess
-    try {
-      child = spawn(candidates[0], [], { stdio: ['pipe', 'pipe', 'ignore'] })
-    } catch {
-      this.dead = true
-      return
-    }
-    this.child = child
-    this.state = 'uci'
-    const out = child.stdout
-    if (!out) {
-      this.kill()
-      return
-    }
-    out.setEncoding('utf8')
-    out.on('data', (d: string) => this.onData(d))
-    child.on('error', () => this.onDead())
-    child.on('close', () => this.onDead())
-    child.stdin?.write('uci\n')
-    this.clearIdle()
-  }
-
-  private onDead(): void {
-    if (this.dead) return
-    this.dead = true
-    this.kill()
-    for (const w of this.queue.splice(0)) {
-      clearTimeout(w.timer)
-      w.reject(new Error('stockfish process died'))
-    }
-  }
-
-  private kill(): void {
-    try {
-      this.child?.kill()
-    } catch {
-      /* already gone */
-    }
-    this.child = undefined
-    this.clearIdle()
-  }
-
-  private clearIdle(): void {
-    if (this.idleTimer) clearTimeout(this.idleTimer)
-    this.idleTimer = undefined
-  }
-
-  private scheduleIdle(): void {
-    this.clearIdle()
-    this.idleTimer = setTimeout(() => this.kill(), IDLE_MS)
-  }
-
-  private onData(data: string): void {
-    this.buf += data
-    let nl: number
-    while ((nl = this.buf.indexOf('\n')) >= 0) {
-      const line = this.buf.slice(0, nl).trim()
-      this.buf = this.buf.slice(nl + 1)
-      if (!line) continue
-      this.onLine(line)
-    }
-  }
-
-  private onLine(line: string): void {
-    if (line === 'uciok') {
-      if (this.state === 'uci') {
-        this.state = 'options'
-        this.child?.stdin?.write(
-          `setoption name Threads value 1\nsetoption name Hash value ${ENGINE_HASH_MB}\nisready\n`,
-        )
-      }
-      return
-    }
-    if (line === 'readyok') {
-      if (this.state === 'options') {
-        this.state = 'search'
-      }
-      return
-    }
-    if (this.state !== 'search') return
-    if (!this.busy) return
-    if (line.startsWith('info')) {
-      // Keep the last (deepest) info line per search for result metadata.
-      const depthM = line.match(/depth (\d+)/)
-      const cpM = line.match(/score cp (-?\d+)/)
-      const mateM = line.match(/score mate (-?\d+)/)
-      if (depthM) this.lastDepth = Number(depthM[1])
-      if (mateM) {
-        this.lastMate = Number(mateM[1])
-        this.lastCp = undefined
-      } else if (cpM) {
-        this.lastCp = Number(cpM[1])
-      }
-      return
-    }
-    if (line.startsWith('bestmove')) {
-      if (this.discardNextBestmove) {
-        // Leftover from a cancelled (timed-out) search — drop it.
-        this.discardNextBestmove = false
-        return
-      }
-      const w = this.queue.shift()
-      if (!w) return
-      clearTimeout(w.timer)
-      this.busy = false
-      this.scheduleIdle()
-      const b = line.split(/\s+/)[1]
-      if (!b || b === '(none)') {
-        w.resolve({ move: '(none)', noMove: true, depth: this.lastDepth })
-      } else {
-        w.resolve({
-          move: b,
-          depth: this.lastDepth,
-          scoreCp: this.lastMate !== undefined ? undefined : this.lastCp,
-        })
-      }
-      this.lastDepth = undefined
-      this.lastCp = undefined
-      this.lastMate = undefined
-    }
-  }
-
-  ask(fen: string, movetimeMs: number, timeoutMs: number): Promise<EngineMove> {
-    return new Promise<EngineMove>((resolve, reject) => {
-      const timer = setTimeout(() => {
-        const i = this.queue.indexOf(w)
-        if (i >= 0) this.queue.splice(i, 1)
-        this.busy = false
-        // CRITICAL (OOM fix): a search that exceeds the timeout keeps running
-        // in the engine until `movetime` elapses. Sending `stop` cancels it
-        // immediately so the engine returns to idle and no one-shot fallback
-        // is needed — the old code left the search running, the fallback
-        // spawned a 2nd engine, and two NNUE nets OOMed the 512MB container.
-        try {
-          this.child?.stdin?.write('stop\n')
-        } catch {
-          /* engine may be gone */
-        }
-        this.discardNextBestmove = true
-        // ask() will see the pool fail and fall back to a one-shot engine
-        reject(new Error(`stockfish timeout ${timeoutMs}ms`))
-      }, timeoutMs)
-      const w: Waiting = { resolve, reject, timer, seq: 0 }
-      this.queue.push(w)
-      if (!this.busy) {
-        this.busy = true
-        this.clearIdle()
-        if (this.child) {
-          this.child?.stdin?.write(
-            `position fen ${fen}\ngo movetime ${movetimeMs}\n`,
-          )
-        } else {
-          // Engine not spawned yet (e.g. ready() timed out mid-handshake):
-          // don't mark busy for a child that doesn't exist — the timeout
-          // above will reject this waiter and the pool will recover.
-          this.busy = false
-        }
-      }
-    })
-  }
-}
-
-const pool: UciSession[] = []
-
-/**
- * Pre-spawn + initialise pool engines so the first real move doesn't pay the
- * ~2-4s spawn cost. Fire-and-forget; safe to call repeatedly.
- */
-export const warmPool = (count = POOL_MAX): void => {
-  // Bounded by POOL_MAX: concurrent calls are harmless (extra loop
-  // iterations are skipped as pool.length grows).
-  for (let i = 0; i < count && pool.length < POOL_MAX; i++) {
-    const s = new UciSession()
-    pool.push(s)
-    s.ready().catch(() => undefined)
-  }
-}
-
-function takeSession(): Promise<UciSession | undefined> {
-  return (async () => {
-    // Evict dead sessions so the slot can be respawned — otherwise one dead
-    // engine would force every future move onto the slow one-shot path.
-    for (let i = pool.length - 1; i >= 0; i--) {
-      if (pool[i].isDead) pool.splice(i, 1)
-    }
-    for (const s of pool) if (s.alive && !s.isBusy) return s
-    if (pool.length < POOL_MAX) {
-      const s = new UciSession()
-      pool.push(s)
-      return (await s.ready()) ? s : undefined
-    }
-    // All busy — wait for the first alive one to free up (queue head).
-    const head = pool.find((s) => s.alive)
-    if (!head) return undefined
-    const ok = await head.ready()
-    return ok ? head : undefined
-  })()
-}
-
-/** One-shot engine (diagnostics / fallback): spawn, move, kill. */
-const oneShot = (
-  candidates: string[],
-  fen: string,
-  movetimeMs: number,
-  timeoutMs: number,
-): Promise<EngineMove> =>
+// ── Daemon liveness / lazy spawn (dev only) ────────────────────────────────
+const pingDaemon = (): Promise<boolean> =>
   new Promise((resolve) => {
-    if (!candidates.length) {
-      resolve({ move: '(none)', noMove: true })
-      return
-    }
-    let child: ChildProcess
-    try {
-      child = spawn(candidates[0], [], { stdio: ['pipe', 'pipe', 'ignore'] })
-    } catch {
-      resolve({ move: '(none)', noMove: true })
-      return
-    }
-    let done = false
-    const finish = (move: string | undefined, info?: EngineInfo) => {
-      if (done) return
-      done = true
-      clearTimeout(timer)
+    const s = net.connect(DAEMON_PORT, DAEMON_HOST)
+    const done = (ok: boolean) => {
       try {
-        child.kill()
+        s.destroy()
       } catch {
         /* already gone */
       }
-      resolve({ move: move ?? '(none)', depth: info?.depth, scoreCp: info?.scoreCp, noMove: !move })
+      resolve(ok)
     }
-    const timer = setTimeout(() => finish(undefined), timeoutMs + 2000)
-    child.on('error', () => finish(undefined))
-    child.on('close', () => finish(undefined))
-    const out = child.stdout
-    if (!out) {
-      finish(undefined)
-      return
+    s.setTimeout(1500)
+    s.on('connect', () => {
+      s.write(JSON.stringify({ ping: true }) + '\n')
+    })
+    s.on('data', () => done(true))
+    s.on('timeout', () => done(false))
+    s.on('error', () => done(false))
+  })
+
+let daemonSpawnPromise: Promise<boolean> | null = null
+const spawnDaemon = (): Promise<boolean> => {
+  if (!daemonSpawnPromise) {
+    daemonSpawnPromise = (async () => {
+      // Prefer the bundled daemon (api/engine-daemon.js). In prod the
+      // entrypoint already started it; in local dev we start it here.
+      const candidates = [
+        process.env.STOCKFISH_DAEMON_PATH,
+        path.join(__dirname, '../../engine-daemon.js'),
+        path.join(__dirname, '../engine-daemon.js'),
+        '/app/api/engine-daemon.js',
+      ].filter((p): p is string => !!p)
+      for (const p of candidates) {
+        if (!fs.existsSync(p)) continue
+        const { spawn } = require('child_process') as typeof import('child_process')
+        const env = { ...process.env }
+        const bin = findStockfishCandidates()[0]
+        if (bin) env.STOCKFISH_BIN_PATH = bin
+        env.STOCKFISH_DAEMON_PORT = String(DAEMON_PORT)
+        env.STOCKFISH_DAEMON_HOST = DAEMON_HOST
+        const child = spawn(process.execPath, [p], {
+          env,
+          stdio: ['ignore', 'pipe', 'pipe'],
+          detached: true,
+          cwd: path.dirname(p),
+        })
+        child.unref()
+        child.stdout?.on('data', (d: Buffer) => {
+          const line = d.toString().trim()
+          if (line) console.log(`[stockfish] ${line}`)
+        })
+        child.stderr?.on('data', (d: Buffer) => {
+          const line = d.toString().trim()
+          if (line) console.error(`[stockfish] ${line}`)
+        })
+        // Wait until the port answers ping (engine boot can take a few s).
+        const t0 = Date.now()
+        while (Date.now() - t0 < DEV_SPAWN_TIMEOUT_MS) {
+          if (await pingDaemon()) return true
+          await new Promise((r) => setTimeout(r, 250))
+        }
+        return false
+      }
+      return false
+    })()
+  }
+  return daemonSpawnPromise
+}
+
+const ensureDaemon = async (): Promise<boolean> => {
+  if (await pingDaemon()) return true
+  return spawnDaemon()
+}
+
+// ── One move from the daemon ───────────────────────────────────────────────
+const requestMove = (fen: string, movetimeMs: number, timeoutMs: number): Promise<EngineMove> =>
+  new Promise((resolve) => {
+    let settled = false
+    let s: net.Socket
+    const finish = (r: EngineMove) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      try {
+        s.destroy()
+      } catch {
+        /* already gone */
+      }
+      resolve(r)
     }
+    const timer = setTimeout(() => finish({ move: '(none)', noMove: true }), timeoutMs)
+    try {
+      s = net.connect(DAEMON_PORT, DAEMON_HOST)
+    } catch {
+      return finish({ move: '(none)', noMove: true })
+    }
+    s.setTimeout(timeoutMs + 2000)
     let buf = ''
-    let state: 'uci' | 'options' | 'search' = 'uci'
-    out.setEncoding('utf8')
-    out.on('data', (d: string) => {
-      buf += d
-      let nl: number
-      while ((nl = buf.indexOf('\n')) >= 0) {
-        const line = buf.slice(0, nl).trim()
-        buf = buf.slice(nl + 1)
-        if (!line || done) continue
-        if (line === 'uciok') {
-          if (state === 'uci') {
-            state = 'options'
-            child.stdin?.write(`setoption name Threads value 1\nsetoption name Hash value ${ENGINE_HASH_MB}\nisready\n`)
-          }
-          continue
+    s.on('connect', () => {
+      s.write(JSON.stringify({ fen, movetime: movetimeMs }) + '\n')
+    })
+    s.on('data', (d: Buffer) => {
+      buf += d.toString('utf8')
+      const i = buf.indexOf('\n')
+      if (i < 0) return
+      const line = buf.slice(0, i).trim()
+      try {
+        const r = JSON.parse(line) as EngineMove & { error?: string }
+        if (r.error || !r.move) {
+          finish({ move: '(none)', noMove: true })
+          return
         }
-        if (line === 'readyok') {
-          if (state === 'options') {
-            state = 'search'
-            child.stdin?.write(`position fen ${fen}\ngo movetime ${movetimeMs}\n`)
-          }
-          continue
-        }
-        if (state !== 'search') continue
-        if (line.startsWith('bestmove')) {
-          const b = line.split(/\s+/)[1]
-          finish(b && b !== '(none)' ? b : undefined)
-        }
+        finish({
+          move: r.move,
+          depth: r.depth,
+          scoreCp: r.scoreCp,
+          mate: r.mate,
+          noMove: r.noMove,
+        })
+      } catch {
+        finish({ move: '(none)', noMove: true })
       }
     })
-    child.stdin?.write('uci\n')
+    s.on('error', () => finish({ move: '(none)', noMove: true }))
+    s.on('timeout', () => finish({ move: '(none)', noMove: true }))
   })
 
 /**
- * Compute the bot's next move for `fen`.
- * Uses the pool; falls back to a one-shot engine if the pool fails.
+ * Compute the bot's next move for `fen` via the shared daemon.
+ * Never throws — callers rely on the (none) contract.
  */
 export const getStockfishMove = async (
   fen: string,
@@ -449,60 +225,58 @@ export const getStockfishMove = async (
   movetimeMs = BOT_MOVETIME_MS,
   timeoutMs = DEFAULT_TIMEOUT_MS,
 ): Promise<EngineMove> => {
-  const candidates = findStockfishCandidates()
-  if (!candidates.length) {
-    return { move: '(none)', noMove: true }
-  }
-
   // Validate FEN up front — a bad FEN makes Stockfish refuse to search.
   try {
     new Chess(fen)
   } catch {
     return { move: '(none)', noMove: true }
   }
-
   try {
-    const session = await takeSession()
-    if (session) {
-      return await session.ask(fen, movetimeMs, timeoutMs)
+    if (!(await ensureDaemon())) {
+      return { move: '(none)', noMove: true }
     }
+    return await requestMove(fen, movetimeMs, timeoutMs)
   } catch {
-    /* pool failed → one-shot below */
+    return { move: '(none)', noMove: true }
   }
-  return oneShot(candidates, fen, movetimeMs, timeoutMs)
+}
+
+/**
+ * No-op in daemon mode — the daemon owns the engine for the container
+ * lifetime. Kept for API compatibility with the step handlers.
+ */
+export const warmPool = (_count = 1): void => {
+  // Fire-and-forget: make sure the daemon is up so the first real move
+  // doesn't pay the spawn+boot cost.
+  void ensureDaemon()
 }
 
 export type EngineDiagnosticResult = {
-  candidates: string[]
-  resolved?: string
-  exists?: boolean
-  executable?: boolean
   platform: string
   arch: string
-  testMove?: string
-  testMs?: number
-  ok: boolean
+  envBinPath: string | null
+  candidates: Array<{ path: string; exists: boolean; executable: boolean }>
+  testMove: string | null
+  testOk: boolean
 }
 
 export const engineDiagnostic = async (): Promise<EngineDiagnosticResult> => {
   const candidates = findStockfishCandidates()
   const base: EngineDiagnosticResult = {
-    candidates,
     platform: `${process.platform}/${process.arch}`,
     arch: process.arch,
-    ok: false,
+    envBinPath: process.env.STOCKFISH_BIN_PATH || null,
+    candidates: candidates.map((p) => ({
+      path: p,
+      exists: true,
+      executable: !!(fs.statSync(p).mode & 0o111),
+    })),
+    testMove: null,
+    testOk: false,
   }
-  if (!candidates.length) return base
-  const bin = candidates[0]
-  base.resolved = bin
-  base.exists = fs.existsSync(bin)
-  base.executable = fs.statSync(bin).mode & 0o111 ? true : fs.accessSync(bin, fs.constants.X_OK) === undefined ? true : false
-  // Reuse the pooled engine (do NOT spawn a one-shot — a 2nd engine OOMs
-  // the 512MB instance).
-  const t0 = Date.now()
-  const test = await getStockfishMove('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', 'white', 250, 8000)
+  // Exercise the real path (daemon → engine) with a cheap 250ms search.
+  const test = await getStockfishMove('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', 'white', 250, 20000)
   base.testMove = test.move
-  base.testMs = Date.now() - t0
-  base.ok = !test.noMove && !!test.move && test.move !== '(none)'
+  base.testOk = !test.noMove && !!test.move && test.move !== '(none)'
   return base
 }

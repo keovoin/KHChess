@@ -56,6 +56,11 @@ RUN mkdir -p /app/api/lib \
 # --- Build the Motia app (outputs to api/dist) ---
 RUN pnpm --filter "@chessarena/api" run build
 
+# --- Shared engine daemon (one Stockfish for the whole container) ---
+# COPY api/ above already brings api/engine-daemon.js to /app/api/.
+COPY entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
+
 # --- Runtime config ---
 ENV NODE_ENV=production
 ENV HOST=0.0.0.0
@@ -69,5 +74,6 @@ ENV MOTIA_DOCKER_DISABLE_WORKBENCH=1
 WORKDIR /app/api
 EXPOSE 3000
 
-# Render injects a random PORT; `motia start` ignores $PORT by default, so pass it.
-CMD ["sh", "-c", "exec npx motia start -p ${PORT:-3000}"]
+# Entrypoint starts the shared Stockfish daemon (api/engine-daemon.js) and
+# the Motia server together. Render injects a random PORT; pass it to motia.
+CMD ["/bin/sh", "/app/entrypoint.sh"]
