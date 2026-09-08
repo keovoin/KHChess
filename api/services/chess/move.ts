@@ -109,6 +109,7 @@ export const move = async ({
     lastMove: [move.from, move.to],
     check: chess.inCheck(),
   })
+  markPhase(ctx, 'streams.set done (game+move)')
 
   // Durable copies (fire-and-forget; never blocks the move response).
   persistGame(newGame)
@@ -137,6 +138,7 @@ export const move = async ({
   }
 
   if (status === 'pending') {
+    const tEmit = Date.now()
     await emit({
       topic: 'chess-game-moved',
       data: {
@@ -149,6 +151,7 @@ export const move = async ({
         },
       },
     })
+    markPhase(ctx, 'emit chess-game-moved done', { ms: Date.now() - tEmit })
   } else {
     await emit({
       topic: 'chess-game-ended',
