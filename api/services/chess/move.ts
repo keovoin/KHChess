@@ -113,10 +113,15 @@ export const move = async ({
   persistMove(gameId, moveId, moveRecord)
 
   // Blunder annotation is an optional enhancement — it spawns a Python +
-  // Stockfish analysis (3 evals), so it must NEVER sit on the move's critical
-  // path. Fire-and-forget; the move record gets its `evaluation` field
-  // asynchronously. AI players skip it entirely (there's no human to annotate).
-  if (!game.players[player].ai) {
+  // Stockfish analysis (3 evals, ~4.5s CPU), so it must NEVER sit on the
+  // move's critical path. Two rules keep games fast and the 0.5 CPU viable
+  // for 25 concurrent games:
+  //   1. Fire-and-forget (never await) so a slow annotation can't delay a move.
+  //   2. Skip it entirely for engine (bot) games — there's no human to teach,
+  //      and running it would compete with the bot's own engine search for CPU.
+  const isEngineGame =
+    game.players.white.ai === 'stockfish' || game.players.black.ai === 'stockfish'
+  if (!game.players[player].ai && !isEngineGame) {
     void emit({
       topic: 'evaluate-player-move',
       data: {
