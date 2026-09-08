@@ -4,6 +4,7 @@ import { randomUUID } from 'crypto'
 import { Emitter, FlowContextStateStreams, Logger } from 'motia'
 import { getCaptureScore } from './get-capture-score'
 import { persistGame, persistMove } from '../supabase/persistence'
+import { markPhase, type TimingCtx } from './timing-debug'
 
 export type ActionMove = { from: string; to: string; promote?: 'queen' | 'rook' | 'bishop' | 'knight' }
 type Args = {
@@ -51,6 +52,7 @@ export const move = async ({
   player,
   illegalMoveAttempts = 0,
 }: Args): Promise<Game> => {
+  const ctx: TimingCtx = { gameId, t0: Date.now(), logger }
   const chess = new Chess(game.fen)
   const color = chess.turn() === 'b' ? 'black' : 'white'
 

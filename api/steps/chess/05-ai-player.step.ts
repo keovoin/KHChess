@@ -8,6 +8,7 @@ import { resolveAiModel } from '../../services/ai/ai-config'
 import { evaluateBestMoves } from '../../services/chess/evaluate-best-moves'
 import { getStockfishMove } from '../../services/chess/stockfish'
 import { move } from '../../services/chess/move'
+import { markPhase, type TimingCtx } from '../../services/chess/timing-debug'
 import { persistGame, persistMessage } from '../../services/supabase/persistence'
 
 const MAX_ATTEMPTS = 3
@@ -77,9 +78,11 @@ const engineAction = (fen: string, side: 'white' | 'black'): Promise<{ thought: 
   })
 
 export const handler: Handlers['AI_Player'] = async (input, { logger, emit, streams }) => {
-  logger.info('Received ai-move event [TIMING]', { gameId: input.gameId, t0: Date.now() })
+  const ctx: TimingCtx = { gameId: input.gameId, t0: Date.now(), logger }
+  markPhase(ctx, 'ai-move received')
 
   const game = await streams.chessGame.get('game', input.gameId)
+  markPhase(ctx, 'game loaded', { found: !!game })
   if (!game) {
     logger.error('Game not found', { gameId: input.gameId })
     return
@@ -116,9 +119,8 @@ export const handler: Handlers['AI_Player'] = async (input, { logger, emit, stre
     try {
       if (player.ai === 'stockfish') {
         // Engine path: local Stockfish, near-instant, zero API cost.
-        const tEng = Date.now()
         action = await engineAction(input.fen, input.player)
-        logger.info('engine move [TIMING]', { gameId: input.gameId, ms: Date.now() - tEng, uci: `${action?.move.from}${action?.move.to}` })
+        markPhase(ctx, 'engine move done', { uci: `${action?.move.from}${action?.move.to}` })
       } else {
         // LLM path: only used when the admin config points at a hosted model.
         const prompt = mustache.render(
@@ -167,7 +169,7 @@ export const handler: Handlers['AI_Player'] = async (input, { logger, emit, stre
           emit,
           illegalMoveAttempts: attempts,
         })
-        logger.info('move() done [TIMING]', { gameId: input.gameId, ms: Date.now() - tMove })
+        markPhase(ctx, 'move() done', { ms: Date.now() - tMove })
 
         logger.info('Move successful', { action })
       }
