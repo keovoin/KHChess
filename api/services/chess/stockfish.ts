@@ -117,6 +117,37 @@ export const getStockfishMove = (fen: string, side: 'white' | 'black', movetimeM
   return tryCandidate(candidates, 0, fen, side, movetimeMs, timeoutMs)
 }
 
+/**
+ * Runtime diagnostic (admin/models only, computed once per process):
+ * reports exactly what the engine client sees — candidates, which exist,
+ * which are executable, and a real 250ms test move from the starting
+ * position. Lets us distinguish "binary missing" from "spawn/parse fail".
+ */
+export const engineDiagnostic = async () => {
+  const candidates = findStockfishCandidates()
+  const info = candidates.map((c) => {
+    let exists = false
+    let executable = false
+    try {
+      exists = fs.existsSync(c)
+      if (exists) executable = fs.accessSync(c, fs.constants.X_OK) === undefined
+    } catch {
+      /* keep false */
+    }
+    return { path: c, exists, executable }
+  })
+  // Try an actual move to prove the UCI loop works end-to-end.
+  const test = await getStockfishMove('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', 'white', 250, 5000)
+  return {
+    envBinPath: process.env.STOCKFISH_BIN_PATH ?? null,
+    platform: process.platform,
+    arch: process.arch,
+    candidates: info,
+    testMove: test.uci ?? null,
+    testOk: !!test.uci,
+  }
+}
+
 const tryCandidate = (
   candidates: string[],
   index: number,
