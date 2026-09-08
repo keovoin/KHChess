@@ -19,6 +19,35 @@ export const BOT_MOVETIME_MS = 500
 
 export const isEngineModel = (model?: string): boolean => model === STOCKFISH_MODEL
 
+// Concurrency cap: each Stockfish process is short-lived (~1s) but takes
+// meaningful RSS. 25 games answering simultaneously on a 1 vCPU / 512MB
+// instance would oversubscribe it; 4 in flight keeps worst-case footprint
+// bounded while human thinking time keeps the queue short in practice.
+const MAX_CONCURRENT_ENGINES = 4
+let activeEngines = 0
+const engineQueue: Array<() => void> = []
+
+const withEngineBudget = <T>(run: () => Promise<T>): Promise<T> =>
+  new Promise<T>((resolve, reject) => {
+    const start = () => {
+      activeEngines++
+      run().then(
+        (v) => {
+          activeEngines--
+          engineQueue.shift()?.()
+          resolve(v)
+        },
+        (e) => {
+          activeEngines--
+          engineQueue.shift()?.()
+          reject(e)
+        },
+      )
+    }
+    if (activeEngines < MAX_CONCURRENT_ENGINES) start()
+    else engineQueue.push(start)
+  })
+
 const CANDIDATES = [
   'stockfish-linux-x86-64-universal',
   'stockfish-windows-x86-64-sse41-popcnt.exe',
@@ -121,7 +150,7 @@ const pvToSan = (fen: string, pv?: string[]): string | undefined => {
 export const getStockfishMove = (fen: string, side: 'white' | 'black', movetimeMs = BOT_MOVETIME_MS, timeoutMs = 6000): Promise<EngineMove> => {
   const candidates = findStockfishCandidates()
   if (!candidates.length) return Promise.resolve({})
-  return tryCandidate(candidates, 0, fen, side, movetimeMs, timeoutMs)
+  return withEngineBudget(() => tryCandidate(candidates, 0, fen, side, movetimeMs, timeoutMs))
 }
 
 /**

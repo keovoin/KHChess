@@ -112,16 +112,22 @@ export const move = async ({
   persistGame(newGame)
   persistMove(gameId, moveId, moveRecord)
 
-  await emit({
-    topic: 'evaluate-player-move',
-    data: {
-      gameId,
-      fenBefore: game.fen,
-      fenAfter: move.after,
-      moveId,
-      player,
-    },
-  })
+  // Blunder annotation is an optional enhancement — it spawns a Python +
+  // Stockfish analysis (3 evals), so it must NEVER sit on the move's critical
+  // path. Fire-and-forget; the move record gets its `evaluation` field
+  // asynchronously. AI players skip it entirely (there's no human to annotate).
+  if (!game.players[player].ai) {
+    void emit({
+      topic: 'evaluate-player-move',
+      data: {
+        gameId,
+        fenBefore: game.fen,
+        fenAfter: move.after,
+        moveId,
+        player,
+      },
+    }).catch(() => undefined)
+  }
 
   if (status === 'pending') {
     await emit({

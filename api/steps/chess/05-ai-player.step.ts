@@ -77,7 +77,7 @@ const engineAction = (fen: string, side: 'white' | 'black'): Promise<{ thought: 
   })
 
 export const handler: Handlers['AI_Player'] = async (input, { logger, emit, streams }) => {
-  logger.info('Received ai-move event', { gameId: input.gameId })
+  logger.info('Received ai-move event [TIMING]', { gameId: input.gameId, t0: Date.now() })
 
   const game = await streams.chessGame.get('game', input.gameId)
   if (!game) {
@@ -116,7 +116,9 @@ export const handler: Handlers['AI_Player'] = async (input, { logger, emit, stre
     try {
       if (player.ai === 'stockfish') {
         // Engine path: local Stockfish, near-instant, zero API cost.
+        const tEng = Date.now()
         action = await engineAction(input.fen, input.player)
+        logger.info('engine move [TIMING]', { gameId: input.gameId, ms: Date.now() - tEng, uci: `${action?.move.from}${action?.move.to}` })
       } else {
         // LLM path: only used when the admin config points at a hosted model.
         const prompt = mustache.render(
@@ -154,6 +156,7 @@ export const handler: Handlers['AI_Player'] = async (input, { logger, emit, stre
 
         logger.info('AI response', { action, latencyMs: Date.now() - started })
 
+        const tMove = Date.now()
         await move({
           logger,
           streams,
@@ -164,6 +167,7 @@ export const handler: Handlers['AI_Player'] = async (input, { logger, emit, stre
           emit,
           illegalMoveAttempts: attempts,
         })
+        logger.info('move() done [TIMING]', { gameId: input.gameId, ms: Date.now() - tMove })
 
         logger.info('Move successful', { action })
       }

@@ -1,0 +1,7 @@
+perf: near-instant bot replies (annotation off critical path, engine budget)
+
+- move(): blunder annotation (evaluate-player-move, 3x Stockfish evals) is
+  now fire-and-forget; it is an optional enhancement and was blocking
+  every move (added ~9s per turn).
+- stockfish.ts: cap concurrent engine spawns at 4 (25 live games safety).
+- 05-ai-player.step.ts: phase timestamps for timing diagnosis.
