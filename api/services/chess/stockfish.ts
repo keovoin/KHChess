@@ -15,7 +15,12 @@ import os from 'os'
  *    the search itself is only BOT_MOVETIME_MS (~200ms).
  *  • One move per engine at a time (UCI is sequential); extra concurrent
  *    games queue (FIFO).
- *  • Idle engines close after IDLE_MS to free memory.
+ *  • The single engine stays resident for the container lifetime — the
+ *    first search pays the NNUE net load (~5-9s wall on 0.5 CPU), so
+ *    re-spawning per idle gap would make every bot move pay it again.
+ *  • A search that exceeds the wall timeout is cancelled (`stop`), NOT
+ *    abandoned: abandoning it while the one-shot fallback spawns a 2nd
+ *    engine OOMs the 512MB container (2 × ~133MB NNUE nets).
  *  • Fallback: if the pool engine dies, a fresh one-shot engine is tried.
  *
  *  Capacity: 25 concurrent live games → each turn is one ~200ms search +
@@ -45,8 +50,12 @@ export const isEngineModel = (model?: string): boolean => model === STOCKFISH_MO
 // ~250ms, so even a 25-game surge tails out at ~6-10s worst case, CPU
 // stays near zero, RAM stays ~320MB).
 const POOL_MAX = 1
-const IDLE_MS = 120_000
-const DEFAULT_TIMEOUT_MS = 4000
+// Keep the single engine alive for the lifetime of the container. The NNUE
+// net load on first search costs ~5-9s wall on a cold 0.5-CPU instance;
+// respawning after every idle gap would make every bot move pay that again.
+// One resident engine (~133MB) fits the 512MB budget with the Node runtime.
+const IDLE_MS = Number.MAX_SAFE_INTEGER
+const DEFAULT_TIMEOUT_MS = 30000
 const HANDSHAKE_TIMEOUT_MS = 15000
 const ENGINE_HASH_MB = 16
 
@@ -106,6 +115,11 @@ class UciSession {
   private lastDepth?: number
   private lastCp?: number
   private lastMate?: number
+  // Set when we send `stop` after a timeout: the engine then emits the
+  // cancelled search's bestmove next (UCI stdin is processed in order), so
+  // exactly one bestmove must be discarded — otherwise it would be
+  // attributed to the next, unrelated search.
+  private discardNextBestmove = false
 
   get alive(): boolean {
     return !this.dead && !!this.child
@@ -249,6 +263,11 @@ class UciSession {
       return
     }
     if (line.startsWith('bestmove')) {
+      if (this.discardNextBestmove) {
+        // Leftover from a cancelled (timed-out) search — drop it.
+        this.discardNextBestmove = false
+        return
+      }
       const w = this.queue.shift()
       if (!w) return
       clearTimeout(w.timer)
@@ -276,18 +295,35 @@ class UciSession {
         const i = this.queue.indexOf(w)
         if (i >= 0) this.queue.splice(i, 1)
         this.busy = false
-        this.scheduleIdle()
+        // CRITICAL (OOM fix): a search that exceeds the timeout keeps running
+        // in the engine until `movetime` elapses. Sending `stop` cancels it
+        // immediately so the engine returns to idle and no one-shot fallback
+        // is needed — the old code left the search running, the fallback
+        // spawned a 2nd engine, and two NNUE nets OOMed the 512MB container.
+        try {
+          this.child?.stdin?.write('stop\n')
+        } catch {
+          /* engine may be gone */
+        }
+        this.discardNextBestmove = true
         // ask() will see the pool fail and fall back to a one-shot engine
         reject(new Error(`stockfish timeout ${timeoutMs}ms`))
       }, timeoutMs)
-      const w: Waiting = { resolve, reject, timer }
+      const w: Waiting = { resolve, reject, timer, seq: 0 }
       this.queue.push(w)
       if (!this.busy) {
         this.busy = true
         this.clearIdle()
-        this.child?.stdin?.write(
-          `position fen ${fen}\ngo movetime ${movetimeMs}\n`,
-        )
+        if (this.child) {
+          this.child?.stdin?.write(
+            `position fen ${fen}\ngo movetime ${movetimeMs}\n`,
+          )
+        } else {
+          // Engine not spawned yet (e.g. ready() timed out mid-handshake):
+          // don't mark busy for a child that doesn't exist — the timeout
+          // above will reject this waiter and the pool will recover.
+          this.busy = false
+        }
       }
     })
   }
@@ -311,6 +347,11 @@ export const warmPool = (count = POOL_MAX): void => {
 
 function takeSession(): Promise<UciSession | undefined> {
   return (async () => {
+    // Evict dead sessions so the slot can be respawned — otherwise one dead
+    // engine would force every future move onto the slow one-shot path.
+    for (let i = pool.length - 1; i >= 0; i--) {
+      if (pool[i].isDead) pool.splice(i, 1)
+    }
     for (const s of pool) if (s.alive && !s.isBusy) return s
     if (pool.length < POOL_MAX) {
       const s = new UciSession()
