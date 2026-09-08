@@ -2,287 +2,462 @@ import { spawn, type ChildProcess } from 'child_process'
 import { Chess } from 'chess.js'
 import fs from 'fs'
 import path from 'path'
+import os from 'os'
 
 /**
- * Stockfish UCI client — the "bot" move engine.
+ * Stockfish UCI client — the "bot" move engine (replaces the LLM path).
  *
- * Replaces the LLM move path for engine games: the engine searches the
- * position directly (no prompt, no tokens, no blunders — moves are always
- * legal). One short-lived process per move, single-threaded so N concurrent
- * games share CPU fairly. Binary resolution mirrors the Python eval step:
- * STOCKFISH_BIN_PATH env first, then lib/stockfish relative to the step
- * package root (works both in the Render image and local dev).
+ * Design notes
+ *  ───────────
+ *  • A small POOL of persistent engine processes (UCI over stdio).
+ *    Spawning + initialising Stockfish costs ~1-4s wall on this 0.5-CPU
+ *    instance, so reusing engines is what makes a move "near-instant":
+ *    the search itself is only BOT_MOVETIME_MS (~200ms).
+ *  • One move per engine at a time (UCI is sequential); extra concurrent
+ *    games queue (FIFO).
+ *  • Idle engines close after IDLE_MS to free memory.
+ *  • Fallback: if the pool engine dies, a fresh one-shot engine is tried.
+ *
+ *  Capacity: 25 concurrent live games → each turn is one ~200ms search +
+ *  ~20ms protocol; engines are shared, so CPU stays tiny. 50 DAU is a
+ *  non-issue (see SESSION_LOG capacity note).
  */
 
-export const STOCKFISH_MODEL = 'stockfish-19'
-export const BOT_MOVETIME_MS = 500
+export type EngineMove = {
+  move: string
+  depth?: number
+  scoreCp?: number
+  /** engine reported no legal move (checkmate / stalemate position) */
+  noMove?: boolean
+}
+export type EngineInfo = { depth: number; scoreCp?: number; pv?: string[] }
 
+// NOTE: on a 0.5-CPU instance "movetime" counts CPU time, so 500ms of
+// search took 2-4s wall. 200ms keeps replies snappy and the bot still plays
+// at depth ~10-14, far above casual-opponent strength.
+export const BOT_MOVETIME_MS = 200
+export const STOCKFISH_MODEL = 'stockfish-19'
 export const isEngineModel = (model?: string): boolean => model === STOCKFISH_MODEL
 
-// Concurrency cap: each Stockfish process is short-lived (~1s) but takes
-// meaningful RSS. 25 games answering simultaneously on a 1 vCPU / 512MB
-// instance would oversubscribe it; 4 in flight keeps worst-case footprint
-// bounded while human thinking time keeps the queue short in practice.
-const MAX_CONCURRENT_ENGINES = 4
-let activeEngines = 0
-const engineQueue: Array<() => void> = []
-
-const withEngineBudget = <T>(run: () => Promise<T>): Promise<T> =>
-  new Promise<T>((resolve, reject) => {
-    const start = () => {
-      activeEngines++
-      run().then(
-        (v) => {
-          activeEngines--
-          engineQueue.shift()?.()
-          resolve(v)
-        },
-        (e) => {
-          activeEngines--
-          engineQueue.shift()?.()
-          reject(e)
-        },
-      )
-    }
-    if (activeEngines < MAX_CONCURRENT_ENGINES) start()
-    else engineQueue.push(start)
-  })
-
-const CANDIDATES = [
-  'stockfish-linux-x86-64-universal',
-  'stockfish-windows-x86-64-sse41-popcnt.exe',
-  'stockfish-ubuntu-x86-64-avx2',
-  'stockfish-macos-m1-apple-silicon',
-  'stockfish',
-]
+// Capacity budget: 512MB instance. Each engine (Hash=16) holds ~40-60MB.
+// 2 warm engines ≈ 120MB; bursts queue FIFO on those two (a 25-game surge
+// adds ≤ ~2s worst-case wait, CPU stays near zero).
+const POOL_MAX = 2
+const IDLE_MS = 120_000
+const DEFAULT_TIMEOUT_MS = 4000
+const HANDSHAKE_TIMEOUT_MS = 15000
+const ENGINE_HASH_MB = 16
 
 const findStockfishCandidates = (): string[] => {
   const out: string[] = []
   const pushIf = (p?: string) => {
-    if (p && !out.includes(p) && fs.existsSync(p)) out.push(p)
+    if (!p || out.includes(p) || !fs.existsSync(p)) return
+    if (fs.statSync(p).isDirectory()) {
+      // A directory (local layout) — pick the platform binary inside.
+      const names = os.platform() === 'win32'
+        ? ['stockfish-windows-x86-64-sse41-popcnt.exe', 'stockfish-windows-x86-64-avx2-popcnt.exe']
+        : ['stockfish-linux-x86-64-universal', 'stockfish-linux-x86-64-avx2-popcnt']
+      for (const n of names) pushIf(path.join(p, n))
+      return
+    }
+    out.push(p)
   }
-  // 1. Explicit override (Dockerfile ENV / Render env var). A stale value
-  //    (e.g. a Windows path set during local dev) simply won't exist → skipped.
+  // 1. Explicit override (Dockerfile ENV or local dev).
   pushIf(process.env.STOCKFISH_BIN_PATH)
-  // 2. Hardcoded container paths — the root Dockerfile places the binary as a
-  //    FILE at /app/api/lib/stockfish (not in a subdirectory).
+  // 2. Root Dockerfile builds the app at /app; the engine binary is a FILE.
   pushIf('/app/api/lib/stockfish')
   pushIf('/app/api/lib/stockfish/stockfish-linux-x86-64-universal')
-  // 3. Relative to this module (local dev / build output): <apiRoot>/lib/stockfish
-  const apiRoot = path.join(__dirname, '..', '..')
-  pushIf(path.join(apiRoot, 'lib', 'stockfish'))
-  const dir = path.join(apiRoot, 'lib', 'stockfish')
-  for (const name of CANDIDATES) pushIf(path.join(dir, name))
+  // 3. Local dev layout.
+  const here = __dirname
+  for (const rel of [
+    path.join(here, '../../lib/stockfish'),
+    path.join(here, '../../lib/stockfish/stockfish-linux-x86-64-universal'),
+    path.join(here, '../../lib/stockfish/stockfish-windows-x86-64-sse41-popcnt.exe'),
+    path.join(here, 'lib/stockfish/stockfish-linux-x86-64-universal'),
+  ]) pushIf(rel)
+  // 4. System PATH.
+  const which = os.platform() === 'win32' ? 'where' : 'which'
+  try {
+    const { execSync } = require('child_process') as typeof import('child_process')
+    const w = execSync(`${which} stockfish`, { stdio: ['ignore', 'pipe', 'ignore'] })
+      .toString()
+      .trim()
+      .split(/\r?\n/)[0]
+    pushIf(w)
+  } catch {
+    /* not on PATH */
+  }
   return out
 }
 
-export type EngineMove = {
-  /** UCI move (e.g. "e2e4" or "e7e8q") — always legal when present. */
-  uci?: string
-  /** Score from the bot's perspective, e.g. "+0.35" / "Mate in 4". */
-  evalText?: string
-  depth?: number
-  /** Principal variation as SAN, e.g. "e4 e5 Nf3 Nc6". */
-  pvSan?: string
-}
+type Waiting = { resolve: (r: EngineMove) => void; reject: (e: unknown) => void; timer: NodeJS.Timeout }
 
-type Info = { depth?: number; cp?: number; mate?: number; pv?: string[] }
+class UciSession {
+  private child?: ChildProcess
+  private buf = ''
+  private state: 'uci' | 'options' | 'setpos' | 'search' = 'uci'
+  private busy = false
+  private idleTimer?: NodeJS.Timeout
+  private dead = false
+  private readonly queue: Waiting[] = []
+  // Last search info (reset after each bestmove) — for result metadata.
+  private lastDepth?: number
+  private lastCp?: number
+  private lastMate?: number
 
-// Stockfish reports scores from the side-to-move's view; normalize to the bot's.
-const parseInfo = (line: string, side: 'white' | 'black'): Info | undefined => {
-  if (!line.startsWith('info') || !line.includes(' pv ')) return undefined
-  const parts = line.split(' ')
-  const info: Info = {}
-  for (let i = 1; i < parts.length - 1; i++) {
-    const k = parts[i]
-    const v = parts[i + 1]
-    if (k === 'depth') {
-      info.depth = parseInt(v, 10)
-    } else if (k === 'score') {
-      if (v === 'cp') {
-        info.cp = parseInt(parts[i + 2], 10)
-      } else if (v === 'mate') {
-        info.mate = parseInt(parts[i + 2], 10)
-        i++
-      }
-    } else if (k === 'pv') {
-      info.pv = parts.slice(i + 1)
-      break
-    }
+  get alive(): boolean {
+    return !this.dead && !!this.child
   }
-  const sign = side === 'white' ? 1 : -1
-  if (info.mate !== undefined) info.mate *= sign
-  if (info.cp !== undefined) info.cp *= sign
-  return info
-}
-
-const formatEval = (info: Info | undefined): string | undefined => {
-  if (!info) return undefined
-  if (info.mate !== undefined) return info.mate > 0 ? `Mate in ${info.mate}` : `Mated in ${Math.abs(info.mate)}`
-  if (info.cp !== undefined) {
-    const p = info.cp / 100
-    return `${p > 0 ? '+' : ''}${p.toFixed(2)}`
+  get isBusy(): boolean {
+    return this.busy
   }
-  return undefined
-}
+  get isDead(): boolean {
+    return this.dead
+  }
 
-const pvToSan = (fen: string, pv?: string[]): string | undefined => {
-  if (!pv?.length) return undefined
-  try {
-    const board = new Chess(fen)
-    const sans: string[] = []
-    for (const uci of pv.slice(0, 6)) {
-      if (!/^[a-h][1-8][a-h][1-8][qrbn]?$/.test(uci)) break
-      const m = board.move({
-        from: uci.slice(0, 2),
-        to: uci.slice(2, 4),
-        promotion: uci.length > 4 ? (uci[4] as 'q') : undefined,
+  /** Resolve when this session can take a new move (or spawn a child). */
+  async ready(): Promise<boolean> {
+    if (this.dead) return false
+    if (!this.child) {
+      this.spawn()
+      await new Promise<void>((res) => {
+        const t0 = Date.now()
+        const iv = setInterval(() => {
+          if (this.state === 'search' || this.dead || Date.now() - t0 > HANDSHAKE_TIMEOUT_MS) {
+            clearInterval(iv)
+            res()
+          }
+        }, 50)
       })
-      if (!m) break
-      sans.push(m.san)
+      return this.state === 'search' && !this.dead
     }
-    return sans.join(' ') || undefined
-  } catch {
-    return undefined
+    if (this.busy) {
+      await new Promise<void>((res) => {
+        const iv = setInterval(() => {
+          if (!this.busy || this.dead) {
+            clearInterval(iv)
+            res()
+          }
+        }, 50)
+      })
+      return !this.dead
+    }
+    return true
+  }
+
+  private spawn(): void {
+    const candidates = findStockfishCandidates()
+    if (!candidates.length) {
+      this.dead = true
+      return
+    }
+    let child: ChildProcess
+    try {
+      child = spawn(candidates[0], [], { stdio: ['pipe', 'pipe', 'ignore'] })
+    } catch {
+      this.dead = true
+      return
+    }
+    this.child = child
+    this.state = 'uci'
+    const out = child.stdout
+    if (!out) {
+      this.kill()
+      return
+    }
+    out.setEncoding('utf8')
+    out.on('data', (d: string) => this.onData(d))
+    child.on('error', () => this.onDead())
+    child.on('close', () => this.onDead())
+    child.stdin?.write('uci\n')
+    this.clearIdle()
+  }
+
+  private onDead(): void {
+    if (this.dead) return
+    this.dead = true
+    this.kill()
+    for (const w of this.queue.splice(0)) {
+      clearTimeout(w.timer)
+      w.reject(new Error('stockfish process died'))
+    }
+  }
+
+  private kill(): void {
+    try {
+      this.child?.kill()
+    } catch {
+      /* already gone */
+    }
+    this.child = undefined
+    this.clearIdle()
+  }
+
+  private clearIdle(): void {
+    if (this.idleTimer) clearTimeout(this.idleTimer)
+    this.idleTimer = undefined
+  }
+
+  private scheduleIdle(): void {
+    this.clearIdle()
+    this.idleTimer = setTimeout(() => this.kill(), IDLE_MS)
+  }
+
+  private onData(data: string): void {
+    this.buf += data
+    let nl: number
+    while ((nl = this.buf.indexOf('\n')) >= 0) {
+      const line = this.buf.slice(0, nl).trim()
+      this.buf = this.buf.slice(nl + 1)
+      if (!line) continue
+      this.onLine(line)
+    }
+  }
+
+  private onLine(line: string): void {
+    if (line === 'uciok') {
+      if (this.state === 'uci') {
+        this.state = 'options'
+        this.child?.stdin?.write(
+          `setoption name Threads value 1\nsetoption name Hash value ${ENGINE_HASH_MB}\nisready\n`,
+        )
+      }
+      return
+    }
+    if (line === 'readyok') {
+      if (this.state === 'options') {
+        this.state = 'search'
+      }
+      return
+    }
+    if (this.state !== 'search') return
+    if (!this.busy) return
+    if (line.startsWith('info')) {
+      // Keep the last (deepest) info line per search for result metadata.
+      const depthM = line.match(/depth (\d+)/)
+      const cpM = line.match(/score cp (-?\d+)/)
+      const mateM = line.match(/score mate (-?\d+)/)
+      if (depthM) this.lastDepth = Number(depthM[1])
+      if (mateM) {
+        this.lastMate = Number(mateM[1])
+        this.lastCp = undefined
+      } else if (cpM) {
+        this.lastCp = Number(cpM[1])
+      }
+      return
+    }
+    if (line.startsWith('bestmove')) {
+      const w = this.queue.shift()
+      if (!w) return
+      clearTimeout(w.timer)
+      this.busy = false
+      this.scheduleIdle()
+      const b = line.split(/\s+/)[1]
+      if (!b || b === '(none)') {
+        w.resolve({ move: '(none)', noMove: true, depth: this.lastDepth })
+      } else {
+        w.resolve({
+          move: b,
+          depth: this.lastDepth,
+          scoreCp: this.lastMate !== undefined ? undefined : this.lastCp,
+        })
+      }
+      this.lastDepth = undefined
+      this.lastCp = undefined
+      this.lastMate = undefined
+    }
+  }
+
+  ask(fen: string, movetimeMs: number, timeoutMs: number): Promise<EngineMove> {
+    return new Promise<EngineMove>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        const i = this.queue.indexOf(w)
+        if (i >= 0) this.queue.splice(i, 1)
+        this.busy = false
+        this.scheduleIdle()
+        // ask() will see the pool fail and fall back to a one-shot engine
+        reject(new Error(`stockfish timeout ${timeoutMs}ms`))
+      }, timeoutMs)
+      const w: Waiting = { resolve, reject, timer }
+      this.queue.push(w)
+      if (!this.busy) {
+        this.busy = true
+        this.clearIdle()
+        this.child?.stdin?.write(
+          `position fen ${fen}\ngo movetime ${movetimeMs}\n`,
+        )
+      }
+    })
   }
 }
 
-export const getStockfishMove = (fen: string, side: 'white' | 'black', movetimeMs = BOT_MOVETIME_MS, timeoutMs = 6000): Promise<EngineMove> => {
-  const candidates = findStockfishCandidates()
-  if (!candidates.length) return Promise.resolve({})
-  return withEngineBudget(() => tryCandidate(candidates, 0, fen, side, movetimeMs, timeoutMs))
-}
+const pool: UciSession[] = []
 
 /**
- * Runtime diagnostic (admin/models only, computed once per process):
- * reports exactly what the engine client sees — candidates, which exist,
- * which are executable, and a real 250ms test move from the starting
- * position. Lets us distinguish "binary missing" from "spawn/parse fail".
+ * Pre-spawn + initialise pool engines so the first real move doesn't pay the
+ * ~2-4s spawn cost. Fire-and-forget; safe to call repeatedly.
  */
-export const engineDiagnostic = async () => {
-  const candidates = findStockfishCandidates()
-  const info = candidates.map((c) => {
-    let exists = false
-    let executable = false
-    try {
-      exists = fs.existsSync(c)
-      if (exists) executable = fs.accessSync(c, fs.constants.X_OK) === undefined
-    } catch {
-      /* keep false */
-    }
-    return { path: c, exists, executable }
-  })
-  // Try an actual move to prove the UCI loop works end-to-end.
-  const test = await getStockfishMove('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', 'white', 250, 5000)
-  return {
-    envBinPath: process.env.STOCKFISH_BIN_PATH ?? null,
-    platform: process.platform,
-    arch: process.arch,
-    candidates: info,
-    testMove: test.uci ?? null,
-    testOk: !!test.uci,
+export const warmPool = (count = POOL_MAX): void => {
+  // Bounded by POOL_MAX: concurrent calls are harmless (extra loop
+  // iterations are skipped as pool.length grows).
+  for (let i = 0; i < count && pool.length < POOL_MAX; i++) {
+    const s = new UciSession()
+    pool.push(s)
+    s.ready().catch(() => undefined)
   }
 }
 
-const tryCandidate = (
+function takeSession(): Promise<UciSession | undefined> {
+  return (async () => {
+    for (const s of pool) if (s.alive && !s.isBusy) return s
+    if (pool.length < POOL_MAX) {
+      const s = new UciSession()
+      pool.push(s)
+      return (await s.ready()) ? s : undefined
+    }
+    // All busy — wait for the first alive one to free up (queue head).
+    const head = pool.find((s) => s.alive)
+    if (!head) return undefined
+    const ok = await head.ready()
+    return ok ? head : undefined
+  })()
+}
+
+/** One-shot engine (diagnostics / fallback): spawn, move, kill. */
+const oneShot = (
   candidates: string[],
-  index: number,
   fen: string,
-  side: 'white' | 'black',
   movetimeMs: number,
   timeoutMs: number,
 ): Promise<EngineMove> =>
   new Promise((resolve) => {
-    const bin = candidates[index]
-
-    const nextOrEmpty = (): Promise<EngineMove> =>
-      index + 1 < candidates.length
-        ? tryCandidate(candidates, index + 1, fen, side, movetimeMs, timeoutMs)
-        : Promise.resolve({})
-
-    let child: ChildProcess
-    try {
-      child = spawn(bin, [], { stdio: ['pipe', 'pipe', 'pipe'] })
-    } catch {
-      resolve(nextOrEmpty())
+    if (!candidates.length) {
+      resolve({ move: '(none)', noMove: true })
       return
     }
-
-    let finished = false
-    const finish = (uci?: string, info?: Info) => {
-      if (finished) return
-      finished = true
+    let child: ChildProcess
+    try {
+      child = spawn(candidates[0], [], { stdio: ['pipe', 'pipe', 'ignore'] })
+    } catch {
+      resolve({ move: '(none)', noMove: true })
+      return
+    }
+    let done = false
+    const finish = (move: string | undefined, info?: EngineInfo) => {
+      if (done) return
+      done = true
       clearTimeout(timer)
       try {
         child.kill()
       } catch {
         /* already gone */
       }
-      resolve({ uci, evalText: formatEval(info), depth: info?.depth, pvSan: pvToSan(fen, info?.pv) })
+      resolve({ move: move ?? '(none)', depth: info?.depth, scoreCp: info?.scoreCp, noMove: !move })
     }
-
-    const timer = setTimeout(() => finish(bestRef.best, bestRef.info), timeoutMs)
-
-    // Binary present but not runnable on this platform → try the next candidate.
-    child.once('error', () => {
-      if (!finished) {
-        finished = true
-        clearTimeout(timer)
-        resolve(nextOrEmpty())
-      }
-    })
-
-    let bestRef: { best: string | undefined; info: Info | undefined } = { best: undefined, info: undefined }
-    let buf = ''
-    let state: 'uci' | 'options' | 'search' = 'uci'
-
-    child.on('close', () => finish(bestRef.best, bestRef.info))
-
+    const timer = setTimeout(() => finish(undefined), timeoutMs + 2000)
+    child.on('error', () => finish(undefined))
+    child.on('close', () => finish(undefined))
     const out = child.stdout
-    const err = child.stderr
-    if (!out || !err) {
-      if (!finished) {
-        finished = true
-        clearTimeout(timer)
-      }
-      resolve(nextOrEmpty())
+    if (!out) {
+      finish(undefined)
       return
     }
-    err.on('data', () => undefined)
-
-    out.on('data', (chunk: Buffer) => {
-      buf += chunk.toString()
-      let nl = buf.indexOf('\n')
-      while (nl >= 0) {
+    let buf = ''
+    let state: 'uci' | 'options' | 'search' = 'uci'
+    out.setEncoding('utf8')
+    out.on('data', (d: string) => {
+      buf += d
+      let nl: number
+      while ((nl = buf.indexOf('\n')) >= 0) {
         const line = buf.slice(0, nl).trim()
         buf = buf.slice(nl + 1)
-        nl = buf.indexOf('\n')
-        if (!line) continue
-
+        if (!line || done) continue
+        if (line === 'uciok') {
+          if (state === 'uci') {
+            state = 'options'
+            child.stdin?.write(`setoption name Threads value 1\nsetoption name Hash value ${ENGINE_HASH_MB}\nisready\n`)
+          }
+          continue
+        }
+        if (line === 'readyok') {
+          if (state === 'options') {
+            state = 'search'
+            child.stdin?.write(`position fen ${fen}\ngo movetime ${movetimeMs}\n`)
+          }
+          continue
+        }
+        if (state !== 'search') continue
         if (line.startsWith('bestmove')) {
-          const b = line.split(' ')[1]
-          finish(b && b !== '(none)' ? b : undefined, bestRef.info)
-          continue
-        }
-        if (line.startsWith('info')) {
-          const parsed = parseInfo(line, side)
-          if (parsed) bestRef.info = parsed
-          continue
-        }
-        if (state === 'uci' && line === 'uciok') {
-          // Single thread: concurrent games share CPU fairly instead of
-          // oversubscribing the host (25 games x 4 threads = disaster).
-          child.stdin?.write('setoption name Threads value 1\n')
-          child.stdin?.write('setoption name Hash value 32\n')
-          child.stdin?.write('isready\n')
-          state = 'options'
-        } else if (state === 'options' && line === 'readyok') {
-          child.stdin?.write(`position fen ${fen}\n`)
-          child.stdin?.write(`go movetime ${movetimeMs}\n`)
-          state = 'search'
+          const b = line.split(/\s+/)[1]
+          finish(b && b !== '(none)' ? b : undefined)
         }
       }
     })
-
     child.stdin?.write('uci\n')
   })
+
+/**
+ * Compute the bot's next move for `fen`.
+ * Uses the pool; falls back to a one-shot engine if the pool fails.
+ */
+export const getStockfishMove = async (
+  fen: string,
+  _side: 'white' | 'black',
+  movetimeMs = BOT_MOVETIME_MS,
+  timeoutMs = DEFAULT_TIMEOUT_MS,
+): Promise<EngineMove> => {
+  const candidates = findStockfishCandidates()
+  if (!candidates.length) {
+    return { move: '(none)', noMove: true }
+  }
+
+  // Validate FEN up front — a bad FEN makes Stockfish refuse to search.
+  try {
+    new Chess(fen)
+  } catch {
+    return { move: '(none)', noMove: true }
+  }
+
+  try {
+    const session = await takeSession()
+    if (session) {
+      return await session.ask(fen, movetimeMs, timeoutMs)
+    }
+  } catch {
+    /* pool failed → one-shot below */
+  }
+  return oneShot(candidates, fen, movetimeMs, timeoutMs)
+}
+
+export type EngineDiagnosticResult = {
+  candidates: string[]
+  resolved?: string
+  exists?: boolean
+  executable?: boolean
+  platform: string
+  arch: string
+  testMove?: string
+  testMs?: number
+  ok: boolean
+}
+
+export const engineDiagnostic = async (): Promise<EngineDiagnosticResult> => {
+  const candidates = findStockfishCandidates()
+  const base: EngineDiagnosticResult = {
+    candidates,
+    platform: `${process.platform}/${process.arch}`,
+    arch: process.arch,
+    ok: false,
+  }
+  if (!candidates.length) return base
+  const bin = candidates[0]
+  base.resolved = bin
+  base.exists = fs.existsSync(bin)
+  base.executable = fs.statSync(bin).mode & 0o111 ? true : fs.accessSync(bin, fs.constants.X_OK) === undefined ? true : false
+  const t0 = Date.now()
+  const test = await oneShot(candidates, 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', 250, 8000)
+  base.testMove = test.move
+  base.testMs = Date.now() - t0
+  base.ok = !test.noMove && !!test.move
+  return base
+}

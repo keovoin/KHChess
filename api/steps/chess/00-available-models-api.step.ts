@@ -3,7 +3,7 @@ import { ApiRouteConfig, Handlers } from 'motia'
 import { z } from 'zod'
 import { getAiConfig } from '../../services/ai/ai-config'
 import { supportedModelsByProvider } from '../../services/ai/models'
-import { engineDiagnostic } from '../../services/chess/stockfish'
+import { engineDiagnostic, warmPool } from '../../services/chess/stockfish'
 
 let engineDiagCache: Awaited<ReturnType<typeof engineDiagnostic>> | null = null
 
@@ -47,6 +47,9 @@ export const config: ApiRouteConfig = {
 
 export const handler: Handlers['AvailableModels'] = async (_, { logger }) => {
   logger.info('Received available models request')
+
+  // Keep the engine pool hot so the first bot move doesn't pay spawn cost.
+  warmPool()
 
   if (!engineDiagCache) {
     try {

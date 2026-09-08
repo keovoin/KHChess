@@ -6,7 +6,7 @@ import { z } from 'zod'
 import { makePrompt } from '../../services/ai/make-prompt'
 import { resolveAiModel } from '../../services/ai/ai-config'
 import { evaluateBestMoves } from '../../services/chess/evaluate-best-moves'
-import { getStockfishMove } from '../../services/chess/stockfish'
+import { getStockfishMove, warmPool } from '../../services/chess/stockfish'
 import { move } from '../../services/chess/move'
 import { markPhase, type TimingCtx } from '../../services/chess/timing-debug'
 import { persistGame, persistMessage } from '../../services/supabase/persistence'
@@ -56,15 +56,19 @@ const template = fs.readFileSync(path.join(__dirname, '05-ai-player.mustache'), 
 const engineAction = (fen: string, side: 'white' | 'black'): Promise<{ thought: string; move: { from: string; to: string; promote?: 'queen' | 'rook' | 'bishop' | 'knight' } }> =>
   new Promise((resolve, reject) => {
     getStockfishMove(fen, side).then((res) => {
-      if (!res.uci) {
+      if (!res.move || res.move === '(none)' || res.noMove) {
         reject(new Error('engine returned no move'))
         return
       }
       const promoteMap = { q: 'queen', r: 'rook', b: 'bishop', n: 'knight' } as const
-      const uci = res.uci
+      const uci = res.move
       const thoughtParts: string[] = []
-      if (res.pvSan) thoughtParts.push(`I see the line ${res.pvSan}.`)
-      if (res.evalText) thoughtParts.push(res.evalText.startsWith('Mate') ? 'This ends it — ' + res.evalText + '. Good.' : `Position is ${res.evalText} for me.`)
+      if (typeof res.scoreCp === 'number') {
+        const sign = res.scoreCp >= 0 ? 'ahead' : 'down'
+        thoughtParts.push(`Position is ${sign} ${Math.abs(res.scoreCp)} pts for me at depth ${res.depth ?? '—'}.`)
+      } else if (res.depth) {
+        thoughtParts.push(`Thinking ${res.depth} moves ahead.`)
+      }
       if (!thoughtParts.length) thoughtParts.push('Careful here — I took my time on this one.')
       resolve({
         thought: thoughtParts.join(' '),
@@ -78,6 +82,9 @@ const engineAction = (fen: string, side: 'white' | 'black'): Promise<{ thought: 
   })
 
 export const handler: Handlers['AI_Player'] = async (input, { logger, emit, streams }) => {
+  // Keep the warm engine pool hot (no-op when already at POOL_MAX).
+  warmPool()
+
   const ctx: TimingCtx = { gameId: input.gameId, t0: Date.now(), logger }
   markPhase(ctx, 'ai-move received')
 
