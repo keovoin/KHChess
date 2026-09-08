@@ -29,14 +29,21 @@ const CANDIDATES = [
 
 const findStockfishCandidates = (): string[] => {
   const out: string[] = []
-  const envPath = process.env.STOCKFISH_BIN_PATH
-  if (envPath && fs.existsSync(envPath)) out.push(envPath)
-  // step lives in <root>/steps/chess/ or services/chess/ → lib is at <root>/lib/stockfish
-  const dir = path.join(__dirname, '..', '..', 'lib', 'stockfish')
-  for (const name of CANDIDATES) {
-    const candidate = path.join(dir, name)
-    if (fs.existsSync(candidate)) out.push(candidate)
+  const pushIf = (p?: string) => {
+    if (p && !out.includes(p) && fs.existsSync(p)) out.push(p)
   }
+  // 1. Explicit override (Dockerfile ENV / Render env var). A stale value
+  //    (e.g. a Windows path set during local dev) simply won't exist → skipped.
+  pushIf(process.env.STOCKFISH_BIN_PATH)
+  // 2. Hardcoded container paths — the root Dockerfile places the binary as a
+  //    FILE at /app/api/lib/stockfish (not in a subdirectory).
+  pushIf('/app/api/lib/stockfish')
+  pushIf('/app/api/lib/stockfish/stockfish-linux-x86-64-universal')
+  // 3. Relative to this module (local dev / build output): <apiRoot>/lib/stockfish
+  const apiRoot = path.join(__dirname, '..', '..')
+  pushIf(path.join(apiRoot, 'lib', 'stockfish'))
+  const dir = path.join(apiRoot, 'lib', 'stockfish')
+  for (const name of CANDIDATES) pushIf(path.join(dir, name))
   return out
 }
 
