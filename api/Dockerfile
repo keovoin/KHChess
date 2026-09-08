@@ -17,7 +17,6 @@ RUN npm ci --no-audit --no-fund || npm install --no-audit --no-fund
 # --- App code ---
 COPY steps/ steps/
 COPY services/ services/
-COPY lib/ lib/
 COPY types.d.ts types-api.d.ts tsconfig.json motia-workbench.json ./
 COPY requirements.txt .env.sample ./
 
