@@ -25,8 +25,14 @@ COPY requirements.txt .env.sample ./
 RUN python3 -m venv python_modules \
     && python_modules/bin/pip install --no-cache-dir -r requirements.txt
 
-# Stockfish (linux binary already in lib/)
-RUN chmod +x lib/stockfish/stockfish-linux-x86-64-universal
+# --- Stockfish 19 (official release binary; pinned) ---
+# Note: api/lib/* is gitignored, so the binary must be fetched at build time.
+RUN mkdir -p lib/stockfish \
+    && curl -fsSL --retry 3 -o /tmp/sf.tar.gz \
+       "https://github.com/official-stockfish/Stockfish/releases/download/sf_19/stockfish-linux-x86-64-universal.tar.gz" \
+    && tar -xzf /tmp/sf.tar.gz -C lib/stockfish stockfish/stockfish-linux-x86-64-universal \
+    && chmod +x lib/stockfish/stockfish-linux-x86-64-universal \
+    && rm /tmp/sf.tar.gz
 
 ENV NODE_ENV=production \
     PORT=3000 \
