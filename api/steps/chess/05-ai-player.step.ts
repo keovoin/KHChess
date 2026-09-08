@@ -144,13 +144,21 @@ export const handler: Handlers['AI_Player'] = async (input, { logger, emit, stre
           {},
           { escape: (value: string) => value },
         )
-        action = await makePrompt({
-          prompt,
-          zod: responseSchema,
-          provider: player.ai,
-          logger,
-          model: resolveAiModel(player.ai, player.model),
-        })
+        // Hard timeout: a missing/misconfigured API key must surface as a fast
+        // error (caught below → retry/lose attempts), never a permanent
+        // "Thinking..." hang.
+        action = await Promise.race([
+          makePrompt({
+            prompt,
+            zod: responseSchema,
+            provider: player.ai,
+            logger,
+            model: resolveAiModel(player.ai, player.model),
+          }),
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error(`LLM provider ${player.ai} timed out after 60s`)), 60000),
+          ),
+        ])
       }
 
       logger.info('Updating message', { messageId, gameId: input.gameId })

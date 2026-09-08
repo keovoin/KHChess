@@ -42,8 +42,10 @@ export const CreateGame: React.FC<Props> = ({ onGameCreated, onCancel }) => {
 
   const onPick = (opponent: Opponent) => {
     if (opponent.kind === 'ai') {
-      // the AI plays black; the user (white) picks its provider + model
-      setSetup({ forColor: 'black', isAiEnabled: true, initial: { ai: 'openai' }, opponent })
+      // the AI plays black; the engine bot is the default (server admin default
+      // is stockfish). NEVER hardcode 'openai' here — an LLM provider with a
+      // missing key leaves the bot stuck on "Thinking...".
+      setSetup({ forColor: 'black', isAiEnabled: true, initial: { ai: 'stockfish' }, opponent })
     } else {
       // friend: the user plays white, black seat is left open for the invite
       setSetup({ forColor: 'white', isAiEnabled: false, initial: {}, opponent })
