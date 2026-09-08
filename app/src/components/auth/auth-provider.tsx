@@ -206,33 +206,28 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         return
       }
 
-      // On the web: show the official Telegram Login Widget.
-      const tgApi = window.Telegram as unknown as {
-        Login?: new (opts: {
-          bot_username: string
-          request_access?: boolean
-          onauth: (data: { initData: string }) => void
-          onfailure?: (error?: { description?: string }) => void
-          onclose?: () => void
-        }) => { render: () => void }
-        WebApp?: { ready: () => void; initData?: string }
+      // On the web: the official widget API — Login is a PLAIN OBJECT
+      // (init + open), NOT a constructor. The script is loaded async in
+      // index.html, so wait for it before touching it.
+      const deadline = Date.now() + 5000
+      while (!window.Telegram?.Login) {
+        if (Date.now() > deadline) throw new Error('Telegram login script not loaded')
+        await new Promise((r) => setTimeout(r, 100))
       }
-      if (!tgApi?.Login) throw new Error('Telegram widget unavailable')
-      tgApi.WebApp?.ready()
-      const widget = new tgApi.Login({
-        bot_username: (import.meta.env.VITE_TELEGRAM_BOT_USERNAME ?? 'Khchess_bot') as string,
-        request_access: false,
-        onauth: (data: { initData: string }) => {
-          void finish(data.initData)
-        },
-        onfailure: () => {
-          setIsLoading(false)
-        },
-        onclose: () => {
-          setIsLoading(false)
-        },
-      })
-      widget.render()
+      const api = window.Telegram.Login
+      const botId = Number(import.meta.env.VITE_TELEGRAM_BOT_ID)
+      if (!botId) throw new Error('Telegram bot id not configured')
+      tg?.ready?.()
+      const onAuth = (data: { id: number; first_name: string; [k: string]: unknown }) => {
+        // The widget hands back a flat user object; the backend expects the
+        // canonical initData query string (what the widget posts to itself).
+        const initData = Object.entries(data)
+          .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`)
+          .join('&')
+        void finish(initData)
+      }
+      api.init({ bot_id: botId }, onAuth)
+      api.open(onAuth)
     } catch (error: unknown) {
       console.error('Telegram login error:', error)
       setAuthError(handleAuthError(error))
