@@ -39,10 +39,12 @@ export const BOT_MOVETIME_MS = 200
 export const STOCKFISH_MODEL = 'stockfish-19'
 export const isEngineModel = (model?: string): boolean => model === STOCKFISH_MODEL
 
-// Capacity budget: 512MB instance. Each engine (Hash=16) holds ~40-60MB.
-// 2 warm engines ≈ 120MB; bursts queue FIFO on those two (a 25-game surge
-// adds ≤ ~2s worst-case wait, CPU stays near zero).
-const POOL_MAX = 2
+// Capacity budget: 512MB instance. Each Stockfish process holds ~133MB
+// (embedded NNUE net) + hash — 2 engines OOM the container (verified:
+// crash-loop). ONE warm engine; all games queue FIFO on it (each move is
+// ~250ms, so even a 25-game surge tails out at ~6-10s worst case, CPU
+// stays near zero, RAM stays ~320MB).
+const POOL_MAX = 1
 const IDLE_MS = 120_000
 const DEFAULT_TIMEOUT_MS = 4000
 const HANDSHAKE_TIMEOUT_MS = 15000
@@ -454,10 +456,12 @@ export const engineDiagnostic = async (): Promise<EngineDiagnosticResult> => {
   base.resolved = bin
   base.exists = fs.existsSync(bin)
   base.executable = fs.statSync(bin).mode & 0o111 ? true : fs.accessSync(bin, fs.constants.X_OK) === undefined ? true : false
+  // Reuse the pooled engine (do NOT spawn a one-shot — a 2nd engine OOMs
+  // the 512MB instance).
   const t0 = Date.now()
-  const test = await oneShot(candidates, 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', 250, 8000)
+  const test = await getStockfishMove('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', 'white', 250, 8000)
   base.testMove = test.move
   base.testMs = Date.now() - t0
-  base.ok = !test.noMove && !!test.move
+  base.ok = !test.noMove && !!test.move && test.move !== '(none)'
   return base
 }
