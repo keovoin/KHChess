@@ -20,7 +20,8 @@ export const authApi = {
   guestToken: async (): Promise<{ accessToken: string; user: User }> =>
     apiClient.post<{ accessToken: string; user: User }>('/auth/guest-token', {}),
 
-  // Exchange verified Telegram Login Widget / WebApp initData for an app token.
-  telegramLogin: async (initData: string): Promise<{ accessToken: string; user: User }> =>
-    apiClient.post<{ accessToken: string; user: User }>('/auth/telegram-login', { initData }),
+  // Exchange a verified Telegram OIDC id_token (web) or WebApp initData
+  // (in-app) for an app token.
+  telegramLogin: async (payload: { idToken: string } | { initData: string }): Promise<{ accessToken: string; user: User }> =>
+    apiClient.post<{ accessToken: string; user: User }>('/auth/telegram-login', payload),
 }

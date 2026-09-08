@@ -1,32 +1,56 @@
 /**
- * Global typings for the official Telegram Login Widget script
- * (https://telegram.org/js/telegram-widget.js).
+ * Global typings for the official Telegram Login library
+ * (https://telegram.org/js/telegram-login.js) — the OIDC-based successor
+ * to the deprecated telegram-widget.js.
  *
  * The script exposes `window.Telegram.Login` as a PLAIN OBJECT
- * (init / open / auth / widgetsOrigin) — NOT a constructor.
- * The auth callback receives the flat widget user object
- * (id, first_name, last_name, username, photo_url, auth_date, hash),
- * which the app serializes into the `initData` query string the
- * backend verifies (HMAC over "WebAppData").
+ * (init / open / auth / close) — NOT a constructor.
+ *
+ * Web flow: `Login.init({ client_id }, cb)` + `Login.open()` opens a popup
+ * at oauth.telegram.org; the result arrives via postMessage as
+ *   { id_token, user }  (id_token = OIDC JWT, RS256, must be verified
+ *                        server-side against Telegram's JWKS)
+ *   { error }           (e.g. 'popup_closed')
  *
  * In-app (Telegram's own WebApp) the SDK instead provides
- * `window.Telegram.WebApp.initData` — a ready-made query string.
+ * `window.Telegram.WebApp.initData` — a ready-made query string, still
+ * verified by the backend with the classic HMAC scheme.
  */
-interface TelegramWidgetAuthResult {
-  id: number
-  first_name: string
-  last_name?: string
-  username?: string
-  photo_url?: string
-  auth_date: number
-  hash: string
+
+interface TelegramIdTokenUser {
+  iss?: string
+  aud?: string
+  sub?: string
+  iat?: number
+  exp?: number
+  id?: number
+  name?: string
+  given_name?: string
+  family_name?: string
+  preferred_username?: string
+  picture?: string
   [key: string]: unknown
 }
 
+interface TelegramLoginSuccess {
+  id_token: string
+  user: TelegramIdTokenUser
+  error?: never
+}
+
+interface TelegramLoginFailure {
+  id_token?: never
+  user?: never
+  error: string
+}
+
+type TelegramLoginResult = TelegramLoginSuccess | TelegramLoginFailure
+
 interface TelegramLoginApi {
-  init: (options: { bot_id: number; lang?: string }, onauth: (data: TelegramWidgetAuthResult) => void) => void
-  open: (onauth?: (data: TelegramWidgetAuthResult) => void) => void
-  widgetsOrigin?: string
+  init: (options: { client_id: number; scope?: string[]; nonce?: string; lang?: string }, onauth?: (data: TelegramLoginResult) => void) => void
+  open: (onauth?: (data: TelegramLoginResult) => void) => void
+  auth: (options: { client_id: number; scope?: string[]; nonce?: string; lang?: string }, onauth?: (data: TelegramLoginResult) => void) => void
+  close: () => void
 }
 
 declare global {

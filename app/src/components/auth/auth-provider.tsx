@@ -173,15 +173,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [setUser])
 
-  // Log in with Telegram (Login Widget on the web, WebApp initData in-app).
+  // Log in with Telegram. Web: official Login library (OIDC popup → id_token,
+  // verified server-side against Telegram's JWKS). In-app: WebApp initData
+  // (HMAC). The library is telegram-login.js — NOT the deprecated
+  // telegram-widget.js (its /auth endpoint is dead: "Bot domain invalid").
   const loginWithTelegram = useCallback(async (): Promise<void> => {
     setIsLoading(true)
     setAuthError(null)
 
-    const finish = (initData: string) =>
+    const finish = (payload: { idToken: string } | { initData: string }) =>
       (async () => {
         try {
-          const result = await authApi.telegramLogin(initData)
+          const result = await authApi.telegramLogin(payload)
           apiClient.setAuthToken(result.accessToken)
           setUser(result.user)
           const redirect = localStorage.getItem('chessarena-redirect')
@@ -202,12 +205,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       // Inside the Telegram app: the SDK hands us initData directly.
       const tg = window.Telegram?.WebApp
       if (tg?.initData && tg.initData.length > 0) {
-        await finish(tg.initData)
+        await finish({ initData: tg.initData })
         return
       }
 
-      // On the web: the official widget API — Login is a PLAIN OBJECT
-      // (init + open), NOT a constructor. The script is loaded async in
+      // On the web: official OIDC library. The script is loaded async in
       // index.html, so wait for it before touching it.
       const deadline = Date.now() + 5000
       while (!window.Telegram?.Login) {
@@ -215,22 +217,27 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         await new Promise((r) => setTimeout(r, 100))
       }
       const api = window.Telegram.Login
-      const botId = Number(import.meta.env.VITE_TELEGRAM_BOT_ID)
-      if (!botId) throw new Error('Telegram bot id not configured')
-      tg?.ready?.()
-      const onAuth = (data: { id: number; first_name: string; [k: string]: unknown }) => {
-        // The widget hands back a flat user object; the backend expects the
-        // canonical initData query string (what the widget posts to itself).
-        const initData = Object.entries(data)
-          .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`)
-          .join('&')
-        void finish(initData)
+      const clientId = Number(import.meta.env.VITE_TELEGRAM_BOT_ID)
+      if (!clientId) throw new Error('Telegram client id not configured')
+      const onAuth = (data: { id_token?: string; error?: string }) => {
+        if (data.error || !data.id_token) {
+          console.error('Telegram login failed:', data.error ?? 'missing id_token')
+          setAuthError({
+            error: data.error === 'popup_closed' ? 'Telegram login window was closed' : 'Telegram login failed',
+            error_code: data.error ?? '',
+            error_description: '',
+          })
+          setIsLoading(false)
+          return
+        }
+        void finish({ idToken: data.id_token })
       }
-      api.init({ bot_id: botId }, onAuth)
+      api.init({ client_id: clientId }, onAuth)
       api.open(onAuth)
     } catch (error: unknown) {
       console.error('Telegram login error:', error)
       setAuthError(handleAuthError(error))
+      setIsLoading(false)
       throw error
     }
   }, [navigate, setUser])
