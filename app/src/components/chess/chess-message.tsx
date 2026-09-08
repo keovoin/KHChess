@@ -19,12 +19,14 @@ type ChessPlayers = { black: ChessPlayer; white: ChessPlayer }
 
 const avatarImages: ChessPlayers = {
   black: {
+    stockfish: '/avatars/openai-black.png',
     openai: '/avatars/openai-black.png',
     gemini: '/avatars/gemini-black.png',
     claude: '/avatars/claude.webp',
     grok: '/avatars/grok-white.png',
   },
   white: {
+    stockfish: '/avatars/openai-white.png',
     openai: '/avatars/openai-white.png',
     gemini: '/avatars/gemini-white.png',
     claude: '/avatars/claude.webp',

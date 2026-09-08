@@ -6,6 +6,7 @@ import { z } from 'zod'
 import { makePrompt } from '../../services/ai/make-prompt'
 import { resolveAiModel } from '../../services/ai/ai-config'
 import { evaluateBestMoves } from '../../services/chess/evaluate-best-moves'
+import { getStockfishMove } from '../../services/chess/stockfish'
 import { move } from '../../services/chess/move'
 import { persistGame, persistMessage } from '../../services/supabase/persistence'
 
@@ -46,6 +47,35 @@ const responseSchema = z.object({
 
 const template = fs.readFileSync(path.join(__dirname, '05-ai-player.mustache'), 'utf8')
 
+/**
+ * Engine move → { thought, move } shape the rest of the handler expects.
+ * The engine only ever returns legal moves, so there's no retry dance —
+ * the move is computed locally in a few hundred ms (no LLM round trip).
+ */
+const engineAction = (fen: string, side: 'white' | 'black'): Promise<{ thought: string; move: { from: string; to: string; promote?: 'queen' | 'rook' | 'bishop' | 'knight' } }> =>
+  new Promise((resolve, reject) => {
+    getStockfishMove(fen, side).then((res) => {
+      if (!res.uci) {
+        reject(new Error('engine returned no move'))
+        return
+      }
+      const promoteMap = { q: 'queen', r: 'rook', b: 'bishop', n: 'knight' } as const
+      const uci = res.uci
+      const thoughtParts: string[] = []
+      if (res.pvSan) thoughtParts.push(`I see the line ${res.pvSan}.`)
+      if (res.evalText) thoughtParts.push(res.evalText.startsWith('Mate') ? 'This ends it — ' + res.evalText + '. Good.' : `Position is ${res.evalText} for me.`)
+      if (!thoughtParts.length) thoughtParts.push('Careful here — I took my time on this one.')
+      resolve({
+        thought: thoughtParts.join(' '),
+        move: {
+          from: uci.slice(0, 2),
+          to: uci.slice(2, 4),
+          promote: uci.length > 4 ? (promoteMap[uci[4] as 'q' | 'r' | 'b' | 'n'] as 'queen' | 'rook' | 'bishop' | 'knight') : undefined,
+        },
+      })
+    })
+  })
+
 export const handler: Handlers['AI_Player'] = async (input, { logger, emit, streams }) => {
   logger.info('Received ai-move event', { gameId: input.gameId })
 
@@ -69,6 +99,7 @@ export const handler: Handlers['AI_Player'] = async (input, { logger, emit, stre
 
   while (true) {
     const messageId = crypto.randomUUID()
+    const started = Date.now()
 
     logger.info('Creating message', { messageId, gameId: input.gameId })
     const message = await streams.chessGameMessage.set(input.gameId, messageId, {
@@ -80,31 +111,36 @@ export const handler: Handlers['AI_Player'] = async (input, { logger, emit, stre
     })
     persistMessage(input.gameId, messageId, message)
 
-    const prompt = mustache.render(
-      template,
-      {
-        fenBefore: input.fenBefore,
-        fen: input.fen,
-        lastMove: input.lastMove ? { from: input.lastMove[0], to: input.lastMove[1] } : undefined,
-        inCheck: input.check,
-        player: input.player,
-        lastInvalidMove,
-        validMoves,
-      },
-      {},
-      { escape: (value: string) => value },
-    )
-
     let action: z.infer<typeof responseSchema> | undefined
 
     try {
-      action = await makePrompt({
-        prompt,
-        zod: responseSchema,
-        provider: player.ai,
-        logger,
-        model: resolveAiModel(player.ai, player.model),
-      })
+      if (player.ai === 'stockfish') {
+        // Engine path: local Stockfish, near-instant, zero API cost.
+        action = await engineAction(input.fen, input.player)
+      } else {
+        // LLM path: only used when the admin config points at a hosted model.
+        const prompt = mustache.render(
+          template,
+          {
+            fenBefore: input.fenBefore,
+            fen: input.fen,
+            lastMove: input.lastMove ? { from: input.lastMove[0], to: input.lastMove[1] } : undefined,
+            inCheck: input.check,
+            player: input.player,
+            lastInvalidMove,
+            validMoves,
+          },
+          {},
+          { escape: (value: string) => value },
+        )
+        action = await makePrompt({
+          prompt,
+          zod: responseSchema,
+          provider: player.ai,
+          logger,
+          model: resolveAiModel(player.ai, player.model),
+        })
+      }
 
       logger.info('Updating message', { messageId, gameId: input.gameId })
 
@@ -116,7 +152,7 @@ export const handler: Handlers['AI_Player'] = async (input, { logger, emit, stre
         })
         persistMessage(input.gameId, messageId, updatedMessage)
 
-        logger.info('AI response', { action })
+        logger.info('AI response', { action, latencyMs: Date.now() - started })
 
         await move({
           logger,

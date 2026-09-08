@@ -49,10 +49,10 @@ export const CreateGamePlayerForm: React.FC<Props> = ({ player, color, onSubmit,
           <Selector
             isSelected={!!ai}
             className="flex flex-col gap-1 w-full min-h-[102px] p-3"
-            onClick={() => setAi(activeProvider ?? 'openai')}
+            onClick={() => setAi(activeProvider ?? 'stockfish')}
           >
             <div className="flex items-center gap-3">
-              <AiIcon ai={activeProvider ?? 'openai'} color="white" />
+              <AiIcon ai={activeProvider ?? 'stockfish'} color="white" />
               <span className="font-semibold">{t('create.ai')}</span>
             </div>
             {activeModel && (

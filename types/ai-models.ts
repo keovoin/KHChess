@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-export const AiModelProviderSchema = () => z.enum(['openai', 'gemini', 'claude', 'grok'])
+export const AiModelProviderSchema = () => z.enum(['stockfish', 'openai', 'gemini', 'claude', 'grok'])
 export const AiModelsSchema = () =>
   z.object(
     Object.fromEntries(AiModelProviderSchema().options.map((provider) => [provider, z.array(z.string())])) as {

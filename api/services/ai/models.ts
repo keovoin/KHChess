@@ -2,6 +2,7 @@ import { AiModelProvider, AiModels, AiProviderDefaultModel } from '@chessarena/t
 
 // NOTE: these are the models used for AI vs AI games, it is also used for backwards compatibility for existing games that don't have a model assigned to a player
 export const models: AiProviderDefaultModel = {
+  stockfish: 'stockfish-19',
   openai: 'Qwen3.8-27B',
   gemini: 'gemini-2.5-flash',
   claude: 'claude-sonnet-4-20250514',
@@ -10,6 +11,8 @@ export const models: AiProviderDefaultModel = {
 
 // NOTE: these are all the models supported by provider that users can pick in order to play human vs AI games
 export const supportedModelsByProvider: AiModels = {
+  // Local engine — runs in-process, near-instant, no API cost.
+  stockfish: ['stockfish-19'],
   openai: [
     'Qwen3.8-27B',
     // https://platform.openai.com/docs/models

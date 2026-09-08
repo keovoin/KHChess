@@ -1,6 +1,7 @@
 import type { AiModelProvider } from '@chessarena/types/ai-models'
 
-const avatarImages: Record<NonNullable<AiModelProvider>, string> = {
+const avatarImages: Record<NonNullable<AiModelProvider> | 'stockfish', string> = {
+  stockfish: '/avatars/openai-white.png',
   openai: '/avatars/openai-white.png',
   gemini: '/avatars/gemini-white.png',
   claude: '/avatars/claude.png',
@@ -19,6 +20,17 @@ const OpenAI = ({ color }: { color?: string }) => {
 }
 
 export const AiIcon = ({ ai, color }: { ai: NonNullable<AiModelProvider>; color?: string }) => {
+  if (ai === 'stockfish') {
+    // Knight silhouette — the "bot" engine.
+    return (
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path
+          d="M5.5 21h13v-1.5H5.5V21Zm1.1-2.9c.4 0 .8-.15 1.1-.42.6.4 1.4.7 2.3.85.35.06.7.1 1.05.1.37 0 .74-.04 1.1-.11.9-.17 1.7-.5 2.3-.9.35.3.8.48 1.25.48h1.3v-3.4c.6-.4 1-1.05 1-1.8v-2.3c0-.55-.2-1.05-.55-1.45.1-.3.15-.6.15-.9V10.2c0-.6-.15-1.15-.4-1.65l.9-1.95c.1-.25 0-.55-.25-.7-.1-.05-.2-.08-.3-.08h-.4l-1.9 1.35c-.6-.35-1.3-.6-2.05-.7L12.6 4.5c-.15-.35-.55-.5-.9-.35-.15.05-.28.15-.35.3l-1.5 3.15c-.8.2-1.5.55-2.1 1.05-.9.8-1.45 1.95-1.55 3.25-.1 1.15.2 2.25.8 3.1l-.4 1.7c-.15.6-.2 1.25-.1 1.9l.25 1.6Zm9.9-10.6c.55.3 1.15.45 1.8.45l-1.55-.4c-.25-.05-.5-.08-.75-.05Z"
+          fill={color ?? '#9ca3af'}
+        />
+      </svg>
+    )
+  }
   if (ai === 'openai') {
     return (
       <div className="w-[24px] h-[24px] flex items-center justify-center">

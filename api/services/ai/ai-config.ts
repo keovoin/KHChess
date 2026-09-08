@@ -16,8 +16,8 @@ type AiConfig = {
 }
 
 const DEFAULT_CONFIG: AiConfig = {
-  provider: 'openai',
-  model: models.openai, // 'Qwen3.8-27B'
+  provider: 'stockfish',
+  model: models.stockfish, // 'stockfish-19'
 }
 
 let config: AiConfig = { ...DEFAULT_CONFIG }

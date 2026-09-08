@@ -4,6 +4,7 @@ import type { AiModels, AiModelProvider } from '@chessarena/types/ai-models'
 
 export const useGetAiModels = () => {
   const [models, setModels] = useState<AiModels>({
+    stockfish: [],
     openai: [],
     gemini: [],
     claude: [],
