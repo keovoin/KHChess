@@ -2,13 +2,33 @@ import { useAuth } from '@/lib/auth/use-auth'
 import { useTranslation } from '@/lib/i18n'
 import { ChatBubbleAvatar } from '../ui/chat/chat-bubble'
 import { Button } from '../ui/button'
-import { Loader2, LogIn, ShieldCheck, User } from 'lucide-react'
+import { Loader2, LogIn, ShieldCheck, User, XCircle } from 'lucide-react'
 import { useNavigate } from 'react-router'
 
 export const AuthContainer = () => {
-  const { user, isLoading, isAdmin, loginAsGuest, logout } = useAuth()
+  const { user, isLoading, isAdmin, loginAsGuest, logout, authError } = useAuth()
   const { t } = useTranslation()
   const navigate = useNavigate()
+
+  // Visible sign-in failure (e.g. an OAuth leg bounced back with an error).
+  // Without this the user lands on the home page with nothing shown and it
+  // reads as a "timeout" — the real failure is hidden.
+  if (authError) {
+    const detail = [authError.error, authError.error_code, authError.error_description]
+      .filter(Boolean)
+      .join(' · ')
+    return (
+      <div className="w-full rounded-xl border border-red-500/40 bg-red-500/15 px-4 py-3 text-sm text-red-200">
+        <div className="flex items-start gap-2">
+          <XCircle className="size-4 shrink-0 mt-0.5" />
+          <div className="min-w-0">
+            <span className="font-semibold">Sign-in problem: </span>
+            <span className="break-words">{detail || 'unknown error'}</span>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   if (user) {
     return (

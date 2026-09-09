@@ -1,6 +1,7 @@
 import { apiClient } from '@/lib/auth/api-client'
 import { authApi } from '@/lib/auth/auth-api'
 import { AuthService } from '@/lib/auth/auth-service'
+import { supabaseClient } from '@/lib/auth/auth-client'
 import { getAuthParamsFromUrl, handleAuthError } from '@/lib/auth/auth-utils'
 import type { AuthError, SupabaseError } from '@/lib/auth/types'
 import type { User } from '@chessarena/types/user'
@@ -38,32 +39,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   useEffect(() => {
     const params = getAuthParamsFromUrl()
-    const fetchUser = async () => {
-      setAuthError(null)
-      setIsLoading(true)
-
-      try {
-        const session = await AuthService.getSession()
-
-        if (session) {
-          const result = await authApi.auth(session.access_token)
-          const redirect = localStorage.getItem('chessarena-redirect')
-          setUser(result.user)
-
-          if (redirect) {
-            navigate(redirect)
-            localStorage.removeItem('chessarena-redirect')
-          }
-        }
-      } catch (error: unknown) {
-        console.error('Auth state change error:', error)
-        setAuthError(handleAuthError(error))
-      } finally {
-        setIsLoading(false)
-      }
-    }
 
     if (params.error) {
+      // OAuth leg bounced back with an explicit error — surface it, don't
+      // silently sit on the landing page.
       setAuthError({
         error: params.error,
         error_code: params.error_code || '',
@@ -72,8 +51,80 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       return
     }
 
+    const loadSession = async (session: Awaited<ReturnType<typeof AuthService.getSession>>) => {
+      if (!session) return
+      try {
+        const result = await authApi.auth(session.access_token)
+        const redirect = localStorage.getItem('chessarena-redirect')
+        setUser(result.user)
+        if (redirect) {
+          navigate(redirect)
+          localStorage.removeItem('chessarena-redirect')
+        }
+      } catch (error: unknown) {
+        console.error('Auth state change error:', error)
+        setAuthError(handleAuthError(error))
+      }
+    }
+
+    let cancelled = false
+    let settleTimer: ReturnType<typeof setTimeout> | undefined
+
+    const finish = () => {
+      if (settleTimer) clearTimeout(settleTimer)
+      setIsLoading(false)
+    }
+
+    // The Google/Email OAuth return path does a PKCE code-exchange AFTER the
+    // page mounts, so a single getSession() on mount races it (reads before
+    // the session is written) and the app never notices the sign-in → looks
+    // like a "timeout". Subscribe to auth-state changes and also settle the
+    // loader only once Supabase has flushed its initial detection.
+    setIsLoading(true)
+    const { data: sub } = supabaseClient.auth.onAuthStateChange(
+      async (_event, session) => {
+        if (cancelled) return
+        if (session) await loadSession(session)
+        if (session || _event === 'SIGNED_OUT' || _event === 'USER_UPDATED') {
+          if (session) finish()
+          else if (_event === 'SIGNED_OUT') finish()
+        }
+      },
+    )
+
+    // Initial pass (covers access_token-in-hash and already-logged-in reloads).
     if (params.access_token || !apiClient.isAuthenticated()) {
-      fetchUser()
+      AuthService.getSession()
+        .then((session) => {
+          if (cancelled) return
+          if (session) return loadSession(session)
+          // No session on mount. If we're back from an OAuth redirect
+          // (code in URL) wait briefly for the exchange to land, then settle.
+          if (new URLSearchParams(window.location.search).has('code')) {
+            settleTimer = setTimeout(async () => {
+              const s2 = await AuthService.getSession()
+              if (cancelled) return
+              if (s2) await loadSession(s2)
+              finish()
+            }, 3000)
+          } else {
+            finish()
+          }
+        })
+        .catch((error: unknown) => {
+          if (cancelled) return
+          console.error('Auth state change error:', error)
+          setAuthError(handleAuthError(error))
+          finish()
+        })
+    } else {
+      finish()
+    }
+
+    return () => {
+      cancelled = true
+      sub.subscription.unsubscribe()
+      if (settleTimer) clearTimeout(settleTimer)
     }
   }, [navigate, setUser])
 
